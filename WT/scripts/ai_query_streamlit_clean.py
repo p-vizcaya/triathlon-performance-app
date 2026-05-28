@@ -78,7 +78,7 @@ def _dialog_query(modality: str, sex_category: str, age_group: str, locale: str)
     )
     question = st.text_area(
         "Pregunta" if locale == "es" else "Question",
-        placeholder="¿Qué percentil es un Run de 45:00?" if locale == "es" else "What percentile is a 45:00 run?",
+        placeholder="Que percentil es un Run de 45:00?" if locale == "es" else "What percentile is a 45:00 run?",
         height=120,
     )
     if st.button(_ui(locale, "ask"), type="primary", disabled=not question.strip()):
@@ -95,11 +95,25 @@ def _dialog_query(modality: str, sex_category: str, age_group: str, locale: str)
                 timeout=45,
             )
         except LLMClientError:
-            st.error("El asistente de IA no está disponible ahora. Intenta una consulta guiada." if locale == "es" else "The AI assistant is not available right now. Please try a guided query.")
+            st.error("El asistente de IA no esta disponible ahora. Intenta una consulta guiada." if locale == "es" else "The AI assistant is not available right now. Please try a guided query.")
         except ValueError:
             st.error("No pude entender la pregunta. Intenta una consulta guiada." if locale == "es" else "I could not understand the question. Please try a guided query.")
         else:
             _show_clean_response(response, locale)
+
+
+def _attribution(locale: str) -> None:
+    st.divider()
+    if locale == "es":
+        st.caption(
+            "Tablas de desempeno y percentiles elaboradas por P. Vizcaya a partir de resultados "
+            "publicados por World Triathlon."
+        )
+    else:
+        st.caption(
+            "Performance and percentile tables developed by P. Vizcaya using results published "
+            "by World Triathlon."
+        )
 
 
 def main() -> None:
@@ -115,6 +129,8 @@ def main() -> None:
 
     with dialog:
         _dialog_query(modality, sex_category, age_group, locale)
+
+    _attribution(locale)
 
 
 if __name__ == "__main__":
