@@ -24,6 +24,15 @@ def _range_note(result: dict[str, Any]) -> str:
     return ""
 
 
+def _range_note_es(result: dict[str, Any]) -> str:
+    status = result.get("range_status")
+    if status == "below_range":
+        return " El tiempo ingresado es más rápido que el rango de referencia disponible, así que el resultado queda limitado al extremo superior de la curva."
+    if status == "above_range":
+        return " El tiempo ingresado es más lento que el rango de referencia disponible, así que el resultado queda limitado al extremo inferior de la curva."
+    return ""
+
+
 def _invalid_message(result: dict[str, Any]) -> str:
     message = result.get("message")
     if message:
@@ -46,6 +55,20 @@ def _total_time_explanation(result: dict[str, Any]) -> str:
     )
 
 
+def _total_time_explanation_es(result: dict[str, Any]) -> str:
+    if "performance_percentile" in result:
+        return (
+            f"Para {_context(result)}, un tiempo total de {result['input_total_time']} "
+            f"corresponde aproximadamente a {round_percentile(result['performance_percentile'])}."
+            f"{_range_note_es(result)}"
+        )
+    return (
+        f"Para {_context(result)}, {round_percentile(result['percentile'])} "
+        f"corresponde a un tiempo total aproximado de {result['total_time']}."
+        f"{_range_note_es(result)}"
+    )
+
+
 def _segment_explanation(result: dict[str, Any]) -> str:
     segment = result.get("segment")
     if "performance_percentile" in result:
@@ -61,11 +84,34 @@ def _segment_explanation(result: dict[str, Any]) -> str:
     )
 
 
+def _segment_explanation_es(result: dict[str, Any]) -> str:
+    segment = result.get("segment")
+    if "performance_percentile" in result:
+        return (
+            f"Para {_context(result)}, un tiempo de {segment} de {result['input_time']} "
+            f"corresponde aproximadamente a {round_percentile(result['performance_percentile'])}."
+            f"{_range_note_es(result)}"
+        )
+    return (
+        f"Para {_context(result)}, {round_percentile(result['percentile'])} "
+        f"corresponde a un tiempo aproximado de {segment} de {result['time']}."
+        f"{_range_note_es(result)}"
+    )
+
+
 def _derived_total_explanation(result: dict[str, Any]) -> str:
     return (
         f"For {_context(result)}, swim {result['swim_time']}, bike {result['bike_time']}, "
         f"and run {result['run_time']} estimate to a total time of {result['estimated_total_time']} "
         f"after adding average T1 ({result['avg_t1_time']}) and average T2 ({result['avg_t2_time']})."
+    )
+
+
+def _derived_total_explanation_es(result: dict[str, Any]) -> str:
+    return (
+        f"Para {_context(result)}, swim {result['swim_time']}, bike {result['bike_time']} "
+        f"y run {result['run_time']} estiman un tiempo total de {result['estimated_total_time']} "
+        f"después de sumar T1 promedio ({result['avg_t1_time']}) y T2 promedio ({result['avg_t2_time']})."
     )
 
 
@@ -76,6 +122,16 @@ def _estimated_total_percentile_explanation(result: dict[str, Any]) -> str:
         f"The estimate adds average T1 ({result['avg_t1_time']}) and average T2 ({result['avg_t2_time']}) "
         f"to the provided swim, bike, and run times."
         f"{_range_note(result)}"
+    )
+
+
+def _estimated_total_percentile_explanation_es(result: dict[str, Any]) -> str:
+    return (
+        f"Para {_context(result)}, el tiempo total estimado es {result['estimated_total_time']}, "
+        f"lo que corresponde aproximadamente a {round_percentile(result['performance_percentile'])}. "
+        f"La estimación suma T1 promedio ({result['avg_t1_time']}) y T2 promedio ({result['avg_t2_time']}) "
+        f"a los tiempos ingresados de swim, bike y run."
+        f"{_range_note_es(result)}"
     )
 
 
@@ -93,6 +149,20 @@ def _required_run_explanation(result: dict[str, Any]) -> str:
     )
 
 
+def _required_run_explanation_es(result: dict[str, Any]) -> str:
+    target = (
+        f"un tiempo total {round_percentile(result['target_total_percentile'])}"
+        if result.get("entity") == "run_time_for_total_percentile"
+        else f"un tiempo total de {result['target_total_time']}"
+    )
+    return (
+        f"Para {_context(result)}, con swim {result['swim_time']} y bike {result['bike_time']}, "
+        f"el run requerido es aproximadamente {result['required_run_time']} para alcanzar {target}. "
+        f"Esto descuenta T1 promedio ({result['avg_t1_time']}) y T2 promedio ({result['avg_t2_time']}) "
+        f"del total objetivo."
+    )
+
+
 def _required_missing_segment_explanation(result: dict[str, Any]) -> str:
     target = (
         f"{round_percentile(result['target_total_percentile'])} total time"
@@ -103,6 +173,19 @@ def _required_missing_segment_explanation(result: dict[str, Any]) -> str:
         f"For {_context(result)}, the required {result['missing_segment']} is approximately "
         f"{result['required_time']} to reach {target}. This uses average T1 "
         f"({result['avg_t1_time']}) and average T2 ({result['avg_t2_time']})."
+    )
+
+
+def _required_missing_segment_explanation_es(result: dict[str, Any]) -> str:
+    target = (
+        f"un tiempo total {round_percentile(result['target_total_percentile'])}"
+        if result.get("entity") == "required_missing_segment_for_target_percentile"
+        else f"un tiempo total de {result['target_total_time']}"
+    )
+    return (
+        f"Para {_context(result)}, el {result['missing_segment']} requerido es aproximadamente "
+        f"{result['required_time']} para alcanzar {target}. Esto usa T1 promedio "
+        f"({result['avg_t1_time']}) y T2 promedio ({result['avg_t2_time']})."
     )
 
 
@@ -119,6 +202,49 @@ def _gap_explanation(result: dict[str, Any]) -> str:
         f"{round_percentile(result['target_percentile'])}, the target time is approximately "
         f"{result['target_time']}, requiring an improvement of about {result['improvement_time']}."
     )
+
+
+def _gap_explanation_es(result: dict[str, Any]) -> str:
+    if result["direction"] == "already_at_or_above_target":
+        return (
+            f"Para {_context(result)}, el desempeño actual en {result['scope']} es "
+            f"{round_percentile(result['current_percentile'])}, ya igual o superior a "
+            f"{round_percentile(result['target_percentile'])}."
+        )
+    return (
+        f"Para {_context(result)}, el desempeño actual en {result['scope']} es "
+        f"{round_percentile(result['current_percentile'])}. Para alcanzar "
+        f"{round_percentile(result['target_percentile'])}, el tiempo objetivo es aproximadamente "
+        f"{result['target_time']}, lo que requiere mejorar cerca de {result['improvement_time']}."
+    )
+
+
+def _conditional_explanation_es(result: dict[str, Any]) -> str:
+    conditions = result.get("conditions") or []
+    if conditions:
+        text = " y ".join(_condition_text_es(condition) for condition in conditions)
+    else:
+        text = "las condiciones indicadas"
+    return (
+        f"Para {_context(result)}, {result.get('target_segment')} corresponde aproximadamente a "
+        f"{round_percentile(result['conditional_percentile'])} dentro del grupo definido por {text}."
+    )
+
+
+def _condition_text_es(condition: dict[str, Any]) -> str:
+    segment = condition.get("segment")
+    operator = condition.get("operator")
+    if operator == "between":
+        return (
+            f"{segment} entre los percentiles "
+            f"{condition['lower_performance_percentile']:.1f} y "
+            f"{condition['upper_performance_percentile']:.1f}"
+        )
+    if operator == "slower_than":
+        return f"{segment} mas lento que el umbral {condition['performance_percentile']:.1f}"
+    return f"{segment} al menos tan bueno como el umbral {condition['performance_percentile']:.1f}"
+
+
 def _pair_explanation(result: dict[str, Any]) -> str:
     return (
         f"For {_context(result)}, the {result['pair']} combination "
@@ -141,12 +267,35 @@ def _sbr_explanation(result: dict[str, Any]) -> str:
 
 
 def explain_result(result: dict[str, Any], locale: str = "en") -> str:
-    if locale != "en":
-        raise ValueError("Only English explanations are currently supported")
     if not result.get("valid", True):
         return _invalid_message(result)
 
     entity = result.get("entity")
+    if locale == "es":
+        if entity == "total_time_curve":
+            return _total_time_explanation_es(result)
+        if entity == "segment_curve":
+            return _segment_explanation_es(result)
+        if entity == "derived_total":
+            return _derived_total_explanation_es(result)
+        if entity == "estimated_total_percentile":
+            return _estimated_total_percentile_explanation_es(result)
+        if entity in ("run_time_for_target_total", "run_time_for_total_percentile"):
+            return _required_run_explanation_es(result)
+        if entity in ("required_missing_segment_for_target_total", "required_missing_segment_for_target_percentile"):
+            return _required_missing_segment_explanation_es(result)
+        if entity == "gap_to_target_percentile":
+            return _gap_explanation_es(result)
+        if entity == "compare_segments":
+            return str(result.get("summary", "Comparacion de segmentos completada."))
+        if entity == "explain_percentile":
+            return str(result.get("summary", "Explicacion de percentil completada."))
+        if entity == "conditional_segment_percentile":
+            return _conditional_explanation_es(result)
+        return "La consulta se completo, pero no hay una plantilla de explicacion para este tipo de resultado."
+    if locale != "en":
+        raise ValueError("Only English and Spanish explanations are currently supported")
+
     if entity == "total_time_curve":
         return _total_time_explanation(result)
     if entity == "segment_curve":

@@ -48,6 +48,88 @@ QUERY_EXAMPLES = {
     "Explain percentile": "Example: Explain what P75 means for Total or Run.",
 }
 
+UI_TEXT = {
+    "en": {
+        "context": "Context",
+        "language": "Language",
+        "modality": "Modality",
+        "sex": "Sex",
+        "age_group": "Age group",
+        "query": "Query",
+        "run_query": "Run query",
+        "guided_query": "Guided query",
+        "dialog": "Dialog",
+        "payload": "Payload",
+        "get_answer": "Get answer",
+        "ask": "Ask",
+    },
+    "es": {
+        "context": "Contexto",
+        "language": "Idioma",
+        "modality": "Modalidad",
+        "sex": "Sexo",
+        "age_group": "Grupo por edad",
+        "query": "Consulta",
+        "run_query": "Consultar",
+        "guided_query": "Consulta guiada",
+        "dialog": "Diálogo",
+        "payload": "Payload",
+        "get_answer": "Obtener respuesta",
+        "ask": "Preguntar",
+    },
+}
+
+QUERY_LABELS = {
+    "en": {
+        "Total time to percentile": "Total time to percentile",
+        "Percentile to total time": "Percentile to total time",
+        "Segment time to percentile": "Segment time to percentile",
+        "Percentile to segment time": "Percentile to segment time",
+        "Estimated total from Swim/Bike/Run": "Estimated total from Swim/Bike/Run",
+        "Full split evaluation": "Full split evaluation",
+        "Gap to target percentile": "Gap to target percentile",
+        "Required missing segment for target percentile": "Required missing segment for target percentile",
+        "Compare segments": "Compare segments",
+        "Conditional segment percentile": "Conditional segment percentile",
+        "Explain percentile": "Explain percentile",
+    },
+    "es": {
+        "Total time to percentile": "Percentil por tiempo total",
+        "Percentile to total time": "Tiempo total por percentil",
+        "Segment time to percentile": "Percentil por segmento",
+        "Percentile to segment time": "Tiempo de segmento por percentil",
+        "Estimated total from Swim/Bike/Run": "Total estimado por Swim/Bike/Run",
+        "Full split evaluation": "Evaluación completa de segmentos",
+        "Gap to target percentile": "Brecha frente a percentil objetivo",
+        "Required missing segment for target percentile": "Segmento faltante para percentil objetivo",
+        "Compare segments": "Comparar segmentos",
+        "Conditional segment percentile": "Percentil condicional de segmento",
+        "Explain percentile": "Explicar percentil",
+    },
+}
+
+QUERY_EXAMPLES_ES = {
+    "Total time to percentile": "Ejemplo: Standard O 55-59, tiempo total 2:45:00.",
+    "Percentile to total time": "Ejemplo: Standard O 70-74, P80.",
+    "Segment time to percentile": "Ejemplo: Standard O 40-44, Run 45:00, o ritmo de Run 4:30/km.",
+    "Percentile to segment time": "Ejemplo: Sprint F 45-49, Bike P75.",
+    "Estimated total from Swim/Bike/Run": "Ejemplo: Swim 32:00, Bike 1:15:00, Run 45:00. Se suman T1/T2 promedio.",
+    "Full split evaluation": "Ejemplo: Swim 14:00, Bike 36:00, Run 24:30. Reporta segmento principal más fuerte y más débil.",
+    "Gap to target percentile": "Ejemplo: tiempo total actual 2:45:00, objetivo P75.",
+    "Required missing segment for target percentile": "Ejemplo: con Swim y Bike conocidos, encontrar el Run necesario para P75 total.",
+    "Compare segments": "Ejemplo: Swim 32:00, Bike 1:15:00, Run 45:00, con T1/T2/Total opcionales.",
+    "Conditional segment percentile": "Ejemplo: Run 45:00 entre atletas cuyo Swim es al menos tan bueno como 32:00.",
+    "Explain percentile": "Ejemplo: explicar qué significa P75 en Total o Run.",
+}
+
+
+def _ui(locale: str, key: str) -> str:
+    return UI_TEXT.get(locale, UI_TEXT["en"]).get(key, UI_TEXT["en"].get(key, key))
+
+
+def _query_label(locale: str, value: str) -> str:
+    return QUERY_LABELS.get(locale, QUERY_LABELS["en"]).get(value, value)
+
 
 def _clean_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if value not in (None, "")}
@@ -106,12 +188,17 @@ def _summary_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _context_controls() -> tuple[str, str, str]:
-    st.sidebar.header("Context")
-    modality = st.sidebar.selectbox("Modality", ("Standard", "Sprint"))
-    sex_category = st.sidebar.selectbox("Sex", ("O", "F"), help="O includes Open/Male; F is Female.")
+def _language_control() -> str:
+    label = st.sidebar.selectbox("Language / Idioma", ("English", "Español"))
+    return "es" if label == "Español" else "en"
+
+
+def _context_controls(locale: str = "en") -> tuple[str, str, str]:
+    st.sidebar.header(_ui(locale, "context"))
+    modality = st.sidebar.selectbox(_ui(locale, "modality"), ("Standard", "Sprint"))
+    sex_category = st.sidebar.selectbox(_ui(locale, "sex"), ("O", "F"), help="O includes Open/Male; F is Female.")
     age_groups = STANDARD_AGE_GROUPS if modality == "Standard" else SPRINT_AGE_GROUPS
-    age_group = st.sidebar.selectbox("Age group", age_groups)
+    age_group = st.sidebar.selectbox(_ui(locale, "age_group"), age_groups)
     return modality, sex_category, age_group
 
 
@@ -144,24 +231,27 @@ def _percentile_input(label: str, *, key: str) -> float:
     return st.number_input(label, min_value=0.0, max_value=100.0, value=75.0, step=1.0, key=key)
 
 
-def _guided_payload(modality: str, sex_category: str, age_group: str) -> dict[str, Any] | None:
-    query_type = st.selectbox(
-        "Query",
-        (
-            "Total time to percentile",
-            "Percentile to total time",
-            "Segment time to percentile",
-            "Percentile to segment time",
-            "Estimated total from Swim/Bike/Run",
-            "Full split evaluation",
-            "Gap to target percentile",
-            "Required missing segment for target percentile",
-            "Compare segments",
-            "Conditional segment percentile",
-            "Explain percentile",
-        ),
+def _guided_payload(modality: str, sex_category: str, age_group: str, locale: str = "en") -> dict[str, Any] | None:
+    query_options = (
+        "Total time to percentile",
+        "Percentile to total time",
+        "Segment time to percentile",
+        "Percentile to segment time",
+        "Estimated total from Swim/Bike/Run",
+        "Full split evaluation",
+        "Gap to target percentile",
+        "Required missing segment for target percentile",
+        "Compare segments",
+        "Conditional segment percentile",
+        "Explain percentile",
     )
-    st.caption(QUERY_EXAMPLES.get(query_type, ""))
+    query_type = st.selectbox(
+        _ui(locale, "query"),
+        query_options,
+        format_func=lambda value: _query_label(locale, value),
+    )
+    examples = QUERY_EXAMPLES_ES if locale == "es" else QUERY_EXAMPLES
+    st.caption(examples.get(query_type, ""))
 
     base = {"modality": modality, "sex_category": sex_category, "age_group": age_group}
 
@@ -304,14 +394,15 @@ def main() -> None:
     st.set_page_config(page_title="Triathlon Performance Query", layout="wide")
     st.title("Triathlon Performance Query")
 
-    modality, sex_category, age_group = _context_controls()
+    locale = _language_control()
+    modality, sex_category, age_group = _context_controls(locale)
 
-    guided, dialog, payload_tab = st.tabs(["Guided query", "Dialog", "Payload"])
+    guided, dialog, payload_tab = st.tabs([_ui(locale, "guided_query"), _ui(locale, "dialog"), _ui(locale, "payload")])
 
     with guided:
-        payload = _guided_payload(modality, sex_category, age_group)
+        payload = _guided_payload(modality, sex_category, age_group, locale)
         if payload:
-            if st.button("Run query", type="primary"):
+            if st.button(_ui(locale, "run_query"), type="primary"):
                 try:
                     _show_response(_run_payload(payload))
                 except Exception as exc:  # pragma: no cover - UI guard
