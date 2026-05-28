@@ -161,27 +161,24 @@ def _active_context_text(locale: str) -> str:
 
 def _local_follow_up(question: str, modality: str, sex_category: str, age_group: str, locale: str) -> dict[str, Any] | None:
     text = question.lower()
-    faster = re.search(r"\b(\d+(?:\.\d+)?)\s*(?:min|minutos?|minutes?)\s+(?:mas\s+rapido|más\s+rápido|faster)\b", text)
+    faster = re.search(
+        r"(?:bajo|baja|reduzco|mejoro|lower|drop|improve|faster|mas\s+rapido|más\s+rápido).*?"
+        r"(\d{1,2}:\d{2}(?::\d{2})?|\d+(?:\.\d+)?)\s*(?:min|minutos?|minutes?)?",
+        text,
+    )
     if not faster:
         return None
 
     previous = st.session_state.get("short_context") or {}
     result = previous.get("last_result") or {}
-    mentions_swim = re.search(r"\b(nado|nadar|natacion|natación|swim)\b", text)
-    if mentions_swim and not result.get("segment") == "Swim":
-        message = (
-            "Para evaluar nadar mas rapido necesito tus segmentos de Swim/Bike/Run, o que confirmes que quieres restar ese tiempo al total."
-            if locale == "es"
-            else "To evaluate a faster swim, please provide Swim/Bike/Run splits, or confirm that you want to subtract that time from the total."
-        )
-        return {"valid": False, "needs_clarification": True, "message": message}
 
     current_time = result.get("input_total_time") or result.get("input_time")
     if not current_time:
         return None
 
     try:
-        delta_seconds = float(faster.group(1)) * 60
+        raw_delta = faster.group(1)
+        delta_seconds = parse_time_to_seconds(raw_delta) if ":" in raw_delta else float(raw_delta) * 60
         next_time = format_seconds(max(0, parse_time_to_seconds(current_time) - delta_seconds))
     except Exception:
         return None
@@ -272,11 +269,13 @@ def _attribution(locale: str) -> None:
             "Tablas de desempeno y percentiles elaboradas por P. Vizcaya a partir de resultados "
             "publicados por World Triathlon."
         )
+        st.caption("Reportes y comentarios: WhatsApp +57 320 453 5652.")
     else:
         st.caption(
             "Performance and percentile tables developed by P. Vizcaya using results published "
             "by World Triathlon."
         )
+        st.caption("Reports and feedback: WhatsApp +57 320 453 5652.")
 
 
 def main() -> None:
