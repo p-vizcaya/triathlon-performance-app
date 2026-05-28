@@ -44,7 +44,7 @@ def _uncertainty_note(result: dict[str, Any]) -> str:
         )
     if "difficulty_percentile_q25" in uncertainty and "difficulty_percentile_q75" in uncertainty:
         return (
-            f" Across typical event difficulty, the percentile is roughly "
+            f" Using the interquartile range of event difficulty, that same time corresponds roughly to "
             f"P{uncertainty['difficulty_percentile_q25']:.1f} to "
             f"P{uncertainty['difficulty_percentile_q75']:.1f}."
         )
@@ -62,8 +62,8 @@ def _uncertainty_note_es(result: dict[str, Any]) -> str:
         )
     if "difficulty_percentile_q25" in uncertainty and "difficulty_percentile_q75" in uncertainty:
         return (
-            f" Segun la dificultad tipica de eventos, el percentil queda aproximadamente entre "
-            f"P{uncertainty['difficulty_percentile_q25']:.1f} y "
+            f" Usando el rango intercuartilico de dificultad de eventos, ese mismo tiempo corresponde "
+            f"aproximadamente a P{uncertainty['difficulty_percentile_q25']:.1f} a "
             f"P{uncertainty['difficulty_percentile_q75']:.1f}."
         )
     return ""
