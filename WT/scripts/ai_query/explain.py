@@ -39,14 +39,15 @@ def _uncertainty_note(result: dict[str, Any]) -> str:
         return ""
     if "recommended_time_fast" in uncertainty and "recommended_time_slow" in uncertainty:
         return (
-            f" A practical time interval, combining sampling error and event difficulty, is "
+            f" In typically easier or harder championships, the equivalent time is approximately "
             f"{uncertainty['recommended_time_fast']} to {uncertainty['recommended_time_slow']}."
         )
     if "difficulty_percentile_q25" in uncertainty and "difficulty_percentile_q75" in uncertainty:
         return (
-            f" Using the interquartile range of event difficulty, that same time corresponds roughly to "
+            f" Because we do not know whether the athlete's time came from an easier or harder event relative to the championships, "
+            f"its equivalent value ranges roughly from "
             f"P{uncertainty['difficulty_percentile_q25']:.1f} to "
-            f"P{uncertainty['difficulty_percentile_q75']:.1f}."
+            f"P{uncertainty['difficulty_percentile_q75']:.1f}, using the interquartile range of event difficulty."
         )
     return ""
 
@@ -57,14 +58,14 @@ def _uncertainty_note_es(result: dict[str, Any]) -> str:
         return ""
     if "recommended_time_fast" in uncertainty and "recommended_time_slow" in uncertainty:
         return (
-            f" El intervalo practico de tiempo, combinando error muestral y dificultad del evento, es "
-            f"{uncertainty['recommended_time_fast']} a {uncertainty['recommended_time_slow']}."
+            f" En campeonatos tipicamente faciles o dificiles, el tiempo equivalente queda aproximadamente entre "
+            f"{uncertainty['recommended_time_fast']} y {uncertainty['recommended_time_slow']}."
         )
     if "difficulty_percentile_q25" in uncertainty and "difficulty_percentile_q75" in uncertainty:
         return (
-            f" Usando el rango intercuartilico de dificultad de eventos, ese mismo tiempo corresponde "
-            f"aproximadamente a P{uncertainty['difficulty_percentile_q25']:.1f} a "
-            f"P{uncertainty['difficulty_percentile_q75']:.1f}."
+            f" Como no sabemos si el tiempo del atleta viene de un evento facil o dificil respecto a los campeonatos, "
+            f"su valor equivalente queda aproximadamente entre P{uncertainty['difficulty_percentile_q25']:.1f} y "
+            f"P{uncertainty['difficulty_percentile_q75']:.1f}, usando el rango intercuartilico de dificultad de eventos."
         )
     return ""
 
