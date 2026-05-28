@@ -17,7 +17,9 @@ from .normalization import (
     parse_segment_time_to_seconds,
     parse_time_to_seconds,
 )
+from .query_index import get_segment_curve_from_index, get_total_curve_from_index
 from .sources import get_source
+from .uncertainty import uncertainty_for_percentile, uncertainty_for_time
 
 
 FINAL_REFERENCE = "Iteration 2"
@@ -37,6 +39,27 @@ def _read_rows(path_text: str, sheet_name: str) -> tuple[dict[str, Any], ...]:
         workbook.close()
 
 
+@lru_cache(maxsize=128)
+def _read_matching_rows(
+    path_text: str,
+    sheet_name: str,
+    criteria: tuple[tuple[str, Any], ...],
+) -> tuple[dict[str, Any], ...]:
+    workbook = load_workbook(Path(path_text), read_only=True, data_only=True)
+    try:
+        worksheet = workbook[sheet_name]
+        header = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True))
+        columns = {str(column): index for index, column in enumerate(header)}
+        wanted = [(column, value, columns[column]) for column, value in criteria if column in columns]
+        rows: list[dict[str, Any]] = []
+        for values in worksheet.iter_rows(min_row=2, values_only=True):
+            if all(values[index] == value for _, value, index in wanted):
+                rows.append({str(column): value for column, value in zip(header, values)})
+        return tuple(rows)
+    finally:
+        workbook.close()
+
+
 def _source_path(entity: str, modality: str) -> Path:
     source = get_source(entity)
     workbook = source.workbook
@@ -45,32 +68,56 @@ def _source_path(entity: str, modality: str) -> Path:
     return workbook
 
 
+def _segment_reference_path() -> Path:
+    public_path = _source_path("segment_curve", "Standard")
+    compact_path = public_path.parent / "WT_Segment_Query_Source_1989_2025.xlsx"
+    return compact_path if compact_path.exists() else public_path
+
+
 def _total_curve_rows(modality: str, sex_label: str, age_group: str) -> list[tuple[float, float]]:
+    indexed = get_total_curve_from_index(modality, sex_label, age_group)
+    if indexed is not None:
+        return sorted(indexed, key=lambda point: point[0])
     sex = normalize_sex_category(sex_label, field="sex")
     path = _source_path("total_time_curve", modality)
-    rows = _read_rows(str(path), "Reference_Curves")
+    rows = _read_matching_rows(
+        str(path),
+        "Reference_Curves",
+        (
+            ("modality", modality),
+            ("sex", sex),
+            ("age_group", age_group),
+            ("reference", FINAL_REFERENCE),
+        ),
+    )
     points = [
         (float(row["total_seconds"]), float(row["performance_percentile"]))
         for row in rows
-        if row.get("modality") == modality
-        and row.get("sex") == sex
-        and row.get("age_group") == age_group
-        and row.get("reference") == FINAL_REFERENCE
     ]
     return sorted(points, key=lambda point: point[0])
 
 
 def _segment_curve_rows(modality: str, sex_label: str, age_group: str, segment: str) -> list[tuple[float, float]]:
-    path = _source_path("segment_curve", modality)
-    rows = _read_rows(str(path), "Segment_Reference_Curves")
+    indexed = get_segment_curve_from_index(modality, sex_label, age_group, segment)
+    if indexed is not None:
+        return sorted(indexed, key=lambda point: point[0])
+    path = _segment_reference_path()
+    sheet = "Segment_Reference_Curves"
+    criteria = (
+        ("modality", modality),
+        ("sex_label", sex_label),
+        ("age_group", age_group),
+        ("segment", segment),
+        ("reference", FINAL_REFERENCE),
+    )
+    rows = _read_matching_rows(
+        str(path),
+        sheet,
+        criteria,
+    )
     points = [
         (float(row["seconds"]), float(row["performance_percentile"]))
         for row in rows
-        if row.get("modality") == modality
-        and row.get("sex_label") == sex_label
-        and row.get("age_group") == age_group
-        and row.get("segment") == segment
-        and row.get("reference") == FINAL_REFERENCE
     ]
     return sorted(points, key=lambda point: point[0])
 
@@ -148,7 +195,7 @@ def get_total_percentile_by_time(
         return coverage.to_dict()
 
     percentile, interpolated, range_status = _interpolate_y(
-        _total_curve_rows(modality, sex_label, age_group),
+        points := _total_curve_rows(modality, sex_label, age_group),
         total_seconds,
     )
     return {
@@ -165,6 +212,14 @@ def get_total_percentile_by_time(
         "input_total_seconds": total_seconds,
         "input_total_time": format_seconds(total_seconds),
         "performance_percentile": percentile,
+        "uncertainty": uncertainty_for_time(
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            points=points,
+            seconds=total_seconds,
+            percentile=percentile,
+        ),
     }
 
 
@@ -183,7 +238,7 @@ def get_total_time_by_percentile(
         return coverage.to_dict()
 
     seconds, interpolated, range_status = _interpolate_x(
-        _total_curve_rows(modality, sex_label, age_group),
+        points := _total_curve_rows(modality, sex_label, age_group),
         percentile_value,
     )
     return {
@@ -200,6 +255,14 @@ def get_total_time_by_percentile(
         "percentile": percentile_value,
         "total_seconds": seconds,
         "total_time": format_seconds(seconds),
+        "uncertainty": uncertainty_for_percentile(
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            points=points,
+            seconds=seconds,
+            percentile=percentile_value,
+        ),
     }
 
 
@@ -220,7 +283,7 @@ def get_segment_percentile_by_time(
         return coverage.to_dict()
 
     percentile, interpolated, range_status = _interpolate_y(
-        _segment_curve_rows(modality, sex_label, age_group, segment),
+        points := _segment_curve_rows(modality, sex_label, age_group, segment),
         seconds,
     )
     return {
@@ -238,6 +301,15 @@ def get_segment_percentile_by_time(
         "input_seconds": seconds,
         "input_time": format_seconds(seconds),
         "performance_percentile": percentile,
+        "uncertainty": uncertainty_for_time(
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            points=points,
+            seconds=seconds,
+            percentile=percentile,
+            segment=segment,
+        ),
     }
 
 
@@ -258,7 +330,7 @@ def get_segment_time_by_percentile(
         return coverage.to_dict()
 
     seconds, interpolated, range_status = _interpolate_x(
-        _segment_curve_rows(modality, sex_label, age_group, segment),
+        points := _segment_curve_rows(modality, sex_label, age_group, segment),
         percentile_value,
     )
     return {
@@ -276,4 +348,13 @@ def get_segment_time_by_percentile(
         "percentile": percentile_value,
         "seconds": seconds,
         "time": format_seconds(seconds),
+        "uncertainty": uncertainty_for_percentile(
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            points=points,
+            seconds=seconds,
+            percentile=percentile_value,
+            segment=segment,
+        ),
     }

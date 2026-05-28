@@ -33,6 +33,42 @@ def _range_note_es(result: dict[str, Any]) -> str:
     return ""
 
 
+def _uncertainty_note(result: dict[str, Any]) -> str:
+    uncertainty = result.get("uncertainty")
+    if not isinstance(uncertainty, dict):
+        return ""
+    if "recommended_time_fast" in uncertainty and "recommended_time_slow" in uncertainty:
+        return (
+            f" A practical time interval, combining sampling error and event difficulty, is "
+            f"{uncertainty['recommended_time_fast']} to {uncertainty['recommended_time_slow']}."
+        )
+    if "difficulty_percentile_q25" in uncertainty and "difficulty_percentile_q75" in uncertainty:
+        return (
+            f" Across typical event difficulty, the percentile is roughly "
+            f"P{uncertainty['difficulty_percentile_q25']:.1f} to "
+            f"P{uncertainty['difficulty_percentile_q75']:.1f}."
+        )
+    return ""
+
+
+def _uncertainty_note_es(result: dict[str, Any]) -> str:
+    uncertainty = result.get("uncertainty")
+    if not isinstance(uncertainty, dict):
+        return ""
+    if "recommended_time_fast" in uncertainty and "recommended_time_slow" in uncertainty:
+        return (
+            f" El intervalo practico de tiempo, combinando error muestral y dificultad del evento, es "
+            f"{uncertainty['recommended_time_fast']} a {uncertainty['recommended_time_slow']}."
+        )
+    if "difficulty_percentile_q25" in uncertainty and "difficulty_percentile_q75" in uncertainty:
+        return (
+            f" Segun la dificultad tipica de eventos, el percentil queda aproximadamente entre "
+            f"P{uncertainty['difficulty_percentile_q25']:.1f} y "
+            f"P{uncertainty['difficulty_percentile_q75']:.1f}."
+        )
+    return ""
+
+
 def _invalid_message(result: dict[str, Any]) -> str:
     message = result.get("message")
     if message:
@@ -46,11 +82,13 @@ def _total_time_explanation(result: dict[str, Any]) -> str:
         return (
             f"For {_context(result)}, a total time of {result['input_total_time']} "
             f"corresponds to approximately {round_percentile(result['performance_percentile'])}."
+            f"{_uncertainty_note(result)}"
             f"{_range_note(result)}"
         )
     return (
         f"For {_context(result)}, {round_percentile(result['percentile'])} "
         f"corresponds to a total time of approximately {result['total_time']}."
+        f"{_uncertainty_note(result)}"
         f"{_range_note(result)}"
     )
 
@@ -60,11 +98,13 @@ def _total_time_explanation_es(result: dict[str, Any]) -> str:
         return (
             f"Para {_context(result)}, un tiempo total de {result['input_total_time']} "
             f"corresponde aproximadamente a {round_percentile(result['performance_percentile'])}."
+            f"{_uncertainty_note_es(result)}"
             f"{_range_note_es(result)}"
         )
     return (
         f"Para {_context(result)}, {round_percentile(result['percentile'])} "
         f"corresponde a un tiempo total aproximado de {result['total_time']}."
+        f"{_uncertainty_note_es(result)}"
         f"{_range_note_es(result)}"
     )
 
@@ -75,11 +115,13 @@ def _segment_explanation(result: dict[str, Any]) -> str:
         return (
             f"For {_context(result)}, a {segment} time of {result['input_time']} "
             f"corresponds to approximately {round_percentile(result['performance_percentile'])}."
+            f"{_uncertainty_note(result)}"
             f"{_range_note(result)}"
         )
     return (
         f"For {_context(result)}, {round_percentile(result['percentile'])} "
         f"corresponds to a {segment} time of approximately {result['time']}."
+        f"{_uncertainty_note(result)}"
         f"{_range_note(result)}"
     )
 
@@ -90,11 +132,13 @@ def _segment_explanation_es(result: dict[str, Any]) -> str:
         return (
             f"Para {_context(result)}, un tiempo de {segment} de {result['input_time']} "
             f"corresponde aproximadamente a {round_percentile(result['performance_percentile'])}."
+            f"{_uncertainty_note_es(result)}"
             f"{_range_note_es(result)}"
         )
     return (
         f"Para {_context(result)}, {round_percentile(result['percentile'])} "
         f"corresponde a un tiempo aproximado de {segment} de {result['time']}."
+        f"{_uncertainty_note_es(result)}"
         f"{_range_note_es(result)}"
     )
 
@@ -219,6 +263,25 @@ def _gap_explanation_es(result: dict[str, Any]) -> str:
     )
 
 
+def _explain_percentile(result: dict[str, Any]) -> str:
+    scope = result.get("scope") or "the selected reference group"
+    percentile = float(result["percentile"])
+    return (
+        f"{round_percentile(percentile)} means the performance is better than approximately "
+        f"{percentile:.1f}% of {scope}, using the relevant reference curve or joint table."
+    )
+
+
+def _explain_percentile_es(result: dict[str, Any]) -> str:
+    scope = result.get("scope") or "el grupo de referencia seleccionado"
+    scope_text = "Total" if str(scope).lower() == "total" else str(scope)
+    percentile = float(result["percentile"])
+    return (
+        f"{round_percentile(percentile)} significa que el desempeno es mejor que aproximadamente "
+        f"el {percentile:.1f}% de {scope_text}, usando la curva de referencia o tabla conjunta correspondiente."
+    )
+
+
 def _conditional_explanation_es(result: dict[str, Any]) -> str:
     conditions = result.get("conditions") or []
     if conditions:
@@ -289,7 +352,7 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
         if entity == "compare_segments":
             return str(result.get("summary", "Comparacion de segmentos completada."))
         if entity == "explain_percentile":
-            return str(result.get("summary", "Explicacion de percentil completada."))
+            return _explain_percentile_es(result)
         if entity == "conditional_segment_percentile":
             return _conditional_explanation_es(result)
         return "La consulta se completo, pero no hay una plantilla de explicacion para este tipo de resultado."
@@ -313,7 +376,7 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
     if entity == "compare_segments":
         return str(result.get("summary", "Segment comparison completed."))
     if entity == "explain_percentile":
-        return str(result.get("summary", "Percentile explanation completed."))
+        return _explain_percentile(result)
     if entity == "conditional_segment_percentile":
         return str(result.get("summary", "Conditional percentile completed."))
     if entity == "segment_pair_plane":

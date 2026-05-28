@@ -156,8 +156,4 @@ def explain_percentile(
         "entity": "explain_percentile",
         "percentile": percentile,
         "scope": scope_text,
-        "summary": (
-            f"{round_percentile(percentile)} means the performance is better than approximately "
-            f"{percentile:.1f}% of {scope_text}, using the relevant reference curve or joint table."
-        ),
     }
