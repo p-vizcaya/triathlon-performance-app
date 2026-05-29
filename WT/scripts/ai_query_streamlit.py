@@ -44,7 +44,7 @@ QUERY_EXAMPLES = {
     "Segment time to percentile": "Example: Standard O 40-44, Run 45:00, or Run pace 4:30/km.",
     "Percentile to segment time": "Example: Sprint F 45-49, Bike P75.",
     "Estimated total from Swim/Bike/Run": "Example: Swim 32:00, Bike 1:15:00, Run 45:00. Average T1/T2 are added.",
-    "Full split evaluation": "Example: Swim 14:00, Bike 36:00, Run 24:30. Reports strongest/weakest main segment.",
+    "Full split evaluation": "Example: Swim 14:00, Bike 36:00, Run 24:30. Reports each segment percentile and estimated total.",
     "Gap to target percentile": "Example: current total 2:45:00, target P75.",
     "Required missing segment for target percentile": "Example: given Swim and Bike, find the Run needed for total P75.",
     "Compare segments": "Example: Swim 32:00, Bike 1:15:00, Run 45:00, with optional T1/T2/Total.",
@@ -170,7 +170,7 @@ QUERY_LABELS = {
         "Percentile to total time": "Tiempo total por percentil",
         "Segment time to percentile": "Percentil por segmento",
         "Percentile to segment time": "Tiempo de segmento por percentil",
-        "Estimated total from Swim/Bike/Run": "Total estimado por Swim/Bike/Run",
+        "Estimated total from Swim/Bike/Run": "Total estimado por Nataci\u00f3n/Ciclismo/Carrera",
         "Full split evaluation": "Evaluación completa de segmentos",
         "Gap to target percentile": "Brecha frente a percentil objetivo",
         "Required missing segment for target percentile": "Segmento faltante para percentil objetivo",
@@ -184,16 +184,16 @@ QUERY_LABELS = {
 QUERY_EXAMPLES_ES = {
     "Total time to percentile": "Ejemplo: Standard O 55-59, tiempo total 2:45:00.",
     "Percentile to total time": "Ejemplo: Standard O 70-74, P80.",
-    "Segment time to percentile": "Ejemplo: Standard O 40-44, Run 45:00, o ritmo de Run 4:30/km.",
-    "Percentile to segment time": "Ejemplo: Sprint F 45-49, Bike P75.",
-    "Estimated total from Swim/Bike/Run": "Ejemplo: Swim 32:00, Bike 1:15:00, Run 45:00. Se suman T1/T2 promedio.",
-    "Full split evaluation": "Ejemplo: Swim 14:00, Bike 36:00, Run 24:30. Reporta segmento principal más fuerte y más débil.",
+    "Segment time to percentile": "Ejemplo: Standard O 40-44, Carrera 45:00, o ritmo de Carrera 4:30/km.",
+    "Percentile to segment time": "Ejemplo: Sprint F 45-49, Ciclismo P75.",
+    "Estimated total from Swim/Bike/Run": "Ejemplo: Nataci\u00f3n 32:00, Ciclismo 1:15:00, Carrera 45:00. Se suman T1/T2 promedio.",
+    "Full split evaluation": "Ejemplo: Nataci\u00f3n 14:00, Ciclismo 36:00, Carrera 24:30. Reporta cada percentil y el total estimado.",
     "Gap to target percentile": "Ejemplo: tiempo total actual 2:45:00, objetivo P75.",
-    "Required missing segment for target percentile": "Ejemplo: con Swim y Bike conocidos, encontrar el Run necesario para P75 total.",
-    "Compare segments": "Ejemplo: Swim 32:00, Bike 1:15:00, Run 45:00, con T1/T2/Total opcionales.",
+    "Required missing segment for target percentile": "Ejemplo: con Nataci\u00f3n y Ciclismo conocidos, encontrar la Carrera necesaria para P75 total.",
+    "Compare segments": "Ejemplo: Nataci\u00f3n 32:00, Ciclismo 1:15:00, Carrera 45:00, con T1/T2/Total opcionales.",
     "Direct championship comparison": "Ejemplo: Total 2:18:30 directamente contra Gold Coast 2009 y Wollongong 2025, sin ajuste.",
-    "Conditional segment percentile": "Ejemplo: Run 45:00 entre atletas cuyo Swim es al menos tan bueno como 32:00.",
-    "Explain percentile": "Ejemplo: explicar qué significa P75 en Total o Run.",
+    "Conditional segment percentile": "Ejemplo: Carrera 45:00 entre atletas cuya Nataci\u00f3n es al menos tan buena como 32:00.",
+    "Explain percentile": "Ejemplo: explicar qu\u00e9 significa P75 en Total o Carrera.",
 }
 
 
@@ -207,6 +207,54 @@ def _query_label(locale: str, value: str) -> str:
 
 def _route_label(locale: str, value: str) -> str:
     return ROUTE_LABELS.get(locale, ROUTE_LABELS["en"]).get(value, value)
+
+
+def _segment_label(locale: str, value: str) -> str:
+    if locale == "es":
+        return {
+            "Swim": "Nataci\u00f3n",
+            "Bike": "Ciclismo",
+            "Run": "Carrera",
+            "Total": "Total",
+            "Segment profile": "Perfil de segmentos",
+        }.get(value, value)
+    return value
+
+
+def _field_label(locale: str, value: str) -> str:
+    if locale == "es":
+        return {
+            "Total time": "Tiempo total",
+            "Percentile": "Percentil",
+            "Segment": "Segmento",
+            "Segment time": "Tiempo del segmento",
+            "Scope": "Alcance",
+            "Current time": "Tiempo actual",
+            "Current total time": "Tiempo total actual",
+            "Target percentile": "Percentil objetivo",
+            "Missing segment": "Segmento faltante",
+            "Target total percentile": "Percentil total objetivo",
+            "Target segment": "Segmento objetivo",
+            "Target time": "Tiempo objetivo",
+            "Time": "Tiempo",
+            "Condition time": "Tiempo de la condici\u00f3n",
+            "Lower time": "Tiempo inferior",
+            "Upper time": "Tiempo superior",
+            "Add second condition": "Agregar segunda condici\u00f3n",
+            "Run payload": "Ejecutar payload",
+        }.get(value, value)
+    return value
+
+
+def _input_mode_label(locale: str, value: str) -> str:
+    if locale == "es":
+        return {
+            "Time": "Tiempo",
+            "Pace /100m": "Ritmo /100 m",
+            "Speed km/h": "Velocidad km/h",
+            "Pace /km": "Ritmo /km",
+        }.get(value, value)
+    return value
 
 
 def _apply_theme() -> None:
@@ -633,9 +681,10 @@ def _context_controls(locale: str = "en") -> tuple[str, str, str]:
     return modality, sex_category, age_group
 
 
-def _time_or_sport_unit(label: str, segment: str, modality: str, *, key: str) -> str:
+def _time_or_sport_unit(label: str, segment: str, modality: str, *, key: str, locale: str = "en") -> str:
+    visible_label = _field_label(locale, label)
     if segment not in MAIN_SEGMENTS:
-        return st.text_input(label, placeholder="mm:ss or h:mm:ss", key=f"{key}_time")
+        return st.text_input(visible_label, placeholder="mm:ss or h:mm:ss", key=f"{key}_time")
 
     options = ["Time"]
     if segment == "Swim":
@@ -645,21 +694,26 @@ def _time_or_sport_unit(label: str, segment: str, modality: str, *, key: str) ->
     elif segment == "Run":
         options.append("Pace /km")
 
-    mode = st.selectbox(f"{label} input", options, key=f"{key}_mode")
+    mode = st.selectbox(
+        f"{visible_label} input" if locale == "en" else f"Entrada de {visible_label.lower()}",
+        options,
+        key=f"{key}_mode",
+        format_func=lambda value: _input_mode_label(locale, value),
+    )
     if mode == "Time":
-        return st.text_input(label, placeholder="40:00 or 1:10:00", key=f"{key}_time")
+        return st.text_input(visible_label, placeholder="40:00 or 1:10:00", key=f"{key}_time")
     if mode == "Pace /100m":
-        value = st.text_input(label, placeholder="1:40/100m", key=f"{key}_pace100")
+        value = st.text_input(visible_label, placeholder="1:40/100m", key=f"{key}_pace100")
         return f"{value}/100m" if value and "/100m" not in value else value
     if mode == "Speed km/h":
-        value = st.text_input(label, placeholder="32", key=f"{key}_kmh")
+        value = st.text_input(visible_label, placeholder="32", key=f"{key}_kmh")
         return f"{value} km/h" if value and "km" not in value.lower() else value
-    value = st.text_input(label, placeholder="5:00/km", key=f"{key}_pacekm")
+    value = st.text_input(visible_label, placeholder="5:00/km", key=f"{key}_pacekm")
     return f"{value}/km" if value and "/km" not in value else value
 
 
-def _percentile_input(label: str, *, key: str) -> float:
-    return st.number_input(label, min_value=0.0, max_value=100.0, value=75.0, step=1.0, key=key)
+def _percentile_input(label: str, *, key: str, locale: str = "en") -> float:
+    return st.number_input(_field_label(locale, label), min_value=0.0, max_value=100.0, value=75.0, step=1.0, key=key)
 
 
 def _guided_payload(modality: str, sex_category: str, age_group: str, locale: str = "en") -> dict[str, Any] | None:
@@ -681,27 +735,27 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
     base = {"modality": modality, "sex_category": sex_category, "age_group": age_group}
 
     if query_type == "Total time to percentile":
-        total_time = st.text_input("Total time", placeholder="2:45:00")
+        total_time = st.text_input(_field_label(locale, "Total time"), placeholder="2:45:00")
         return {**base, "intent": "total_percentile_by_time", "total_time": total_time}
 
     if query_type == "Percentile to total time":
-        percentile = _percentile_input("Percentile", key="total_percentile")
+        percentile = _percentile_input("Percentile", key="total_percentile", locale=locale)
         return {**base, "intent": "total_time_by_percentile", "percentile": percentile}
 
     if query_type == "Segment time to percentile":
-        segment = st.selectbox("Segment", SEGMENTS)
-        segment_time = _time_or_sport_unit("Segment time", segment, modality, key="segment_time")
+        segment = st.selectbox(_field_label(locale, "Segment"), SEGMENTS, format_func=lambda value: _segment_label(locale, value))
+        segment_time = _time_or_sport_unit("Segment time", segment, modality, key="segment_time", locale=locale)
         return {**base, "intent": "segment_percentile_by_time", "segment": segment, "segment_time": segment_time}
 
     if query_type == "Percentile to segment time":
-        segment = st.selectbox("Segment", SEGMENTS)
-        percentile = _percentile_input("Percentile", key="segment_percentile")
+        segment = st.selectbox(_field_label(locale, "Segment"), SEGMENTS, format_func=lambda value: _segment_label(locale, value))
+        percentile = _percentile_input("Percentile", key="segment_percentile", locale=locale)
         return {**base, "intent": "segment_time_by_percentile", "segment": segment, "percentile": percentile}
 
     if query_type in ("Estimated total from Swim/Bike/Run", "Full split evaluation"):
-        swim_time = _time_or_sport_unit("Swim", "Swim", modality, key="sbr_swim")
-        bike_time = _time_or_sport_unit("Bike", "Bike", modality, key="sbr_bike")
-        run_time = _time_or_sport_unit("Run", "Run", modality, key="sbr_run")
+        swim_time = _time_or_sport_unit(_segment_label(locale, "Swim"), "Swim", modality, key="sbr_swim", locale=locale)
+        bike_time = _time_or_sport_unit(_segment_label(locale, "Bike"), "Bike", modality, key="sbr_bike", locale=locale)
+        run_time = _time_or_sport_unit(_segment_label(locale, "Run"), "Run", modality, key="sbr_run", locale=locale)
         intent = {
             "Estimated total from Swim/Bike/Run": "estimated_total_percentile_from_segments",
             "Full split evaluation": "full_split_evaluation",
@@ -709,9 +763,9 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         return {**base, "intent": intent, "swim_time": swim_time, "bike_time": bike_time, "run_time": run_time}
 
     if query_type == "Gap to target percentile":
-        scope = st.selectbox("Scope", ("Total", "Swim", "Bike", "Run", "T1", "T2"))
-        current_time = _time_or_sport_unit("Current time", scope, modality, key="gap_current") if scope != "Total" else st.text_input("Current total time", placeholder="2:45:00")
-        target_percentile = _percentile_input("Target percentile", key="gap_target")
+        scope = st.selectbox(_field_label(locale, "Scope"), ("Total", "Swim", "Bike", "Run", "T1", "T2"), format_func=lambda value: _segment_label(locale, value))
+        current_time = _time_or_sport_unit("Current time", scope, modality, key="gap_current", locale=locale) if scope != "Total" else st.text_input(_field_label(locale, "Current total time"), placeholder="2:45:00")
+        target_percentile = _percentile_input("Target percentile", key="gap_target", locale=locale)
         segment = None if scope == "Total" else scope
         return {
             **base,
@@ -722,35 +776,40 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         }
 
     if query_type == "Required missing segment for target percentile":
-        missing_segment = st.selectbox("Missing segment", MAIN_SEGMENTS)
-        percentile = _percentile_input("Target total percentile", key="missing_target")
+        missing_segment = st.selectbox(_field_label(locale, "Missing segment"), MAIN_SEGMENTS, format_func=lambda value: _segment_label(locale, value))
+        percentile = _percentile_input("Target total percentile", key="missing_target", locale=locale)
         payload = {**base, "intent": "required_missing_segment_for_target_percentile", "missing_segment": missing_segment, "percentile": percentile}
         for segment in MAIN_SEGMENTS:
             if segment == missing_segment:
                 continue
-            payload[f"{segment.lower()}_time"] = _time_or_sport_unit(segment, segment, modality, key=f"missing_{segment.lower()}")
+            payload[f"{segment.lower()}_time"] = _time_or_sport_unit(_segment_label(locale, segment), segment, modality, key=f"missing_{segment.lower()}", locale=locale)
         return payload
 
     if query_type == "Compare segments":
         payload = {**base, "intent": "compare_segments"}
         col1, col2, col3 = st.columns(3)
         with col1:
-            payload["swim_time"] = _time_or_sport_unit("Swim", "Swim", modality, key="cmp_swim")
+            payload["swim_time"] = _time_or_sport_unit(_segment_label(locale, "Swim"), "Swim", modality, key="cmp_swim", locale=locale)
         with col2:
-            payload["bike_time"] = _time_or_sport_unit("Bike", "Bike", modality, key="cmp_bike")
+            payload["bike_time"] = _time_or_sport_unit(_segment_label(locale, "Bike"), "Bike", modality, key="cmp_bike", locale=locale)
         with col3:
-            payload["run_time"] = _time_or_sport_unit("Run", "Run", modality, key="cmp_run")
+            payload["run_time"] = _time_or_sport_unit(_segment_label(locale, "Run"), "Run", modality, key="cmp_run", locale=locale)
         col4, col5, col6 = st.columns(3)
         with col4:
             payload["t1_time"] = st.text_input("T1", placeholder="2:30")
         with col5:
             payload["t2_time"] = st.text_input("T2", placeholder="1:50")
         with col6:
-            payload["total_time"] = st.text_input("Total", placeholder="1:21:26")
+            payload["total_time"] = st.text_input(_field_label(locale, "Total time"), placeholder="1:21:26")
         return payload
 
     if query_type == "Direct championship comparison":
-        segment = st.selectbox("Segment", SEGMENTS, index=list(SEGMENTS).index("Total"))
+        segment = st.selectbox(
+            _field_label(locale, "Segment"),
+            SEGMENTS,
+            index=list(SEGMENTS).index("Total"),
+            format_func=lambda value: _segment_label(locale, value),
+        )
         st.caption(
             "Direct empirical comparison against the selected championship; no event-difficulty adjustment is applied."
             if locale == "en"
@@ -773,7 +832,7 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         selected_years = [row["year"] for row, label in zip(options, labels) if label in selected]
         min_n = st.number_input("Minimum n" if locale == "en" else "n m\u00ednimo", min_value=1, max_value=100, value=20, step=1)
         if mode in ("Time to event position", "Tiempo a posici\u00f3n en campeonato"):
-            time_value = _time_or_sport_unit("Time" if locale == "en" else "Tiempo", segment, modality, key="event_cmp_time")
+            time_value = _time_or_sport_unit("Time", segment, modality, key="event_cmp_time", locale=locale)
             return {
                 **base,
                 "intent": "event_time_to_position",
@@ -782,7 +841,7 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
                 "event_years": selected_years,
                 "min_n": int(min_n),
             }
-        percentile = _percentile_input("Percentile" if locale == "en" else "Percentil", key="event_cmp_percentile")
+        percentile = _percentile_input("Percentile", key="event_cmp_percentile", locale=locale)
         return {
             **base,
             "intent": "event_time_by_percentile",
@@ -793,45 +852,63 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         }
 
     if query_type == "Conditional segment percentile":
-        target_segment = st.selectbox("Target segment", MAIN_SEGMENTS, index=2)
-        target_time = _time_or_sport_unit("Target time", target_segment, modality, key="cond_target")
+        target_segment = st.selectbox(
+            _field_label(locale, "Target segment"),
+            MAIN_SEGMENTS,
+            index=2,
+            format_func=lambda value: _segment_label(locale, value),
+        )
+        target_time = _time_or_sport_unit("Target time", target_segment, modality, key="cond_target", locale=locale)
         payload = {
             **base,
             "intent": "conditional_segment_percentile",
             "target_segment": target_segment,
             "target_time": target_time,
         }
-        _condition_controls(payload, 1, target_segment, modality)
-        use_second = st.checkbox("Add second condition")
+        _condition_controls(payload, 1, target_segment, modality, locale)
+        use_second = st.checkbox(_field_label(locale, "Add second condition"))
         if use_second:
-            _condition_controls(payload, 2, target_segment, modality)
+            _condition_controls(payload, 2, target_segment, modality, locale)
         return payload
 
     if query_type == "Explain percentile":
-        percentile = _percentile_input("Percentile", key="explain_percentile")
-        scope = st.selectbox("Scope", ("Total", "Swim", "Bike", "Run", "Segment profile"))
+        percentile = _percentile_input("Percentile", key="explain_percentile", locale=locale)
+        scope = st.selectbox(
+            _field_label(locale, "Scope"),
+            ("Total", "Swim", "Bike", "Run", "Segment profile"),
+            format_func=lambda value: _segment_label(locale, value),
+        )
         return {"intent": "explain_percentile", "percentile": percentile, "scope": scope}
 
     return None
 
 
-def _condition_controls(payload: dict[str, Any], index: int, target_segment: str, modality: str) -> None:
+def _condition_controls(payload: dict[str, Any], index: int, target_segment: str, modality: str, locale: str = "en") -> None:
     available = [segment for segment in MAIN_SEGMENTS if segment != target_segment]
     prefix = f"condition_{index}"
-    st.subheader(f"Condition {index}")
-    segment = st.selectbox(f"Condition {index} segment", available, key=f"{prefix}_segment")
-    operator_label = st.selectbox(f"Condition {index} operator", tuple(CONDITION_OPERATORS), key=f"{prefix}_operator")
+    st.subheader(f"Condition {index}" if locale == "en" else f"Condici\u00f3n {index}")
+    segment = st.selectbox(
+        f"Condition {index} segment" if locale == "en" else f"Segmento de condici\u00f3n {index}",
+        available,
+        key=f"{prefix}_segment",
+        format_func=lambda value: _segment_label(locale, value),
+    )
+    operator_label = st.selectbox(
+        f"Condition {index} operator" if locale == "en" else f"Operador de condici\u00f3n {index}",
+        tuple(CONDITION_OPERATORS),
+        key=f"{prefix}_operator",
+    )
     operator = CONDITION_OPERATORS[operator_label]
     payload[f"{prefix}_segment"] = segment
     payload[f"{prefix}_operator"] = operator
     if operator == "between":
         col1, col2 = st.columns(2)
         with col1:
-            payload[f"{prefix}_lower_time"] = _time_or_sport_unit("Lower time", segment, modality, key=f"{prefix}_lower")
+            payload[f"{prefix}_lower_time"] = _time_or_sport_unit("Lower time", segment, modality, key=f"{prefix}_lower", locale=locale)
         with col2:
-            payload[f"{prefix}_upper_time"] = _time_or_sport_unit("Upper time", segment, modality, key=f"{prefix}_upper")
+            payload[f"{prefix}_upper_time"] = _time_or_sport_unit("Upper time", segment, modality, key=f"{prefix}_upper", locale=locale)
     else:
-        payload[f"{prefix}_time"] = _time_or_sport_unit("Condition time", segment, modality, key=f"{prefix}_time")
+        payload[f"{prefix}_time"] = _time_or_sport_unit("Condition time", segment, modality, key=f"{prefix}_time", locale=locale)
 
 
 def _natural_language_tab(modality: str, sex_category: str, age_group: str) -> None:

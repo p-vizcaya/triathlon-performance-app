@@ -385,6 +385,75 @@ def _sbr_explanation(result: dict[str, Any]) -> str:
     )
 
 
+def _main_segment_results(result: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for step in result.get("results", []):
+        item = step.get("result", {}) if isinstance(step, dict) else {}
+        if (
+            item.get("entity") == "segment_curve"
+            and item.get("segment") in ("Swim", "Bike", "Run")
+            and "performance_percentile" in item
+        ):
+            rows.append(item)
+    order = {"Swim": 0, "Bike": 1, "Run": 2}
+    return sorted(rows, key=lambda item: order.get(str(item.get("segment")), 99))
+
+
+def _profile_context(result: dict[str, Any], segments: list[dict[str, Any]]) -> str:
+    if result.get("modality") and result.get("sex_label") and result.get("age_group"):
+        return _context(result)
+    if segments:
+        return _context(segments[0])
+    return _context(result)
+
+
+def _segment_name(segment: Any, locale: str = "en") -> str:
+    if locale == "es":
+        return {
+            "Swim": "Nataci\u00f3n",
+            "Bike": "Ciclismo",
+            "Run": "Carrera",
+            "Total": "Total",
+        }.get(str(segment), str(segment))
+    return str(segment)
+
+
+def _main_segment_profile_explanation(result: dict[str, Any]) -> str:
+    segments = _main_segment_results(result)
+    if not segments:
+        return str(result.get("summary", "The segment profile was evaluated."))
+    segment_text = "; ".join(
+        f"{item['segment']} {item.get('input_time')} = {round_percentile(item['performance_percentile'])}"
+        for item in segments
+    )
+    notes = [f"For {_profile_context(result, segments)}, the segment percentiles are: {segment_text}."]
+    estimated_total = result.get("estimated_total_result")
+    if isinstance(estimated_total, dict) and "performance_percentile" in estimated_total:
+        notes.append(
+            f"Adding average transitions, the estimated total is {estimated_total['estimated_total_time']} "
+            f"({round_percentile(estimated_total['performance_percentile'])})."
+        )
+    return " ".join(notes)
+
+
+def _main_segment_profile_explanation_es(result: dict[str, Any]) -> str:
+    segments = _main_segment_results(result)
+    if not segments:
+        return str(result.get("summary", "La evaluaci\u00f3n de segmentos se complet\u00f3."))
+    segment_text = "; ".join(
+        f"{_segment_name(item['segment'], 'es')} {item.get('input_time')} = {round_percentile(item['performance_percentile'])}"
+        for item in segments
+    )
+    notes = [f"Para {_profile_context(result, segments)}, los percentiles por segmento son: {segment_text}."]
+    estimated_total = result.get("estimated_total_result")
+    if isinstance(estimated_total, dict) and "performance_percentile" in estimated_total:
+        notes.append(
+            f"Al sumar transiciones promedio, el total estimado es {estimated_total['estimated_total_time']} "
+            f"({round_percentile(estimated_total['performance_percentile'])})."
+        )
+    return " ".join(notes)
+
+
 def explain_result(result: dict[str, Any], locale: str = "en") -> str:
     if not result.get("valid", True):
         if result.get("entity") == "event_curve_comparison":
@@ -415,6 +484,8 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
             return _conditional_explanation_es(result)
         if entity == "event_curve_comparison":
             return _event_curve_explanation_es(result)
+        if entity == "main_segment_profile":
+            return _main_segment_profile_explanation_es(result)
         return "La consulta se completo, pero no hay una plantilla de explicacion para este tipo de resultado."
     if locale != "en":
         raise ValueError("Only English and Spanish explanations are currently supported")
@@ -441,6 +512,8 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
         return str(result.get("summary", "Conditional percentile completed."))
     if entity == "event_curve_comparison":
         return _event_curve_explanation(result)
+    if entity == "main_segment_profile":
+        return _main_segment_profile_explanation(result)
     if entity == "segment_pair_plane":
         return _pair_explanation(result)
     if entity == "sbr_cube":

@@ -84,6 +84,27 @@ class QueryAgentTests(unittest.TestCase):
         self.assertIn("Weakest main segment", response["explanation"])
         self.assertEqual(response["result"]["entity"], "main_segment_profile")
 
+    def test_full_split_evaluation_has_spanish_template(self) -> None:
+        response = run_query_agent(
+            {
+                "intent": "full_split_evaluation",
+                "modality": "Standard",
+                "sex_category": "O",
+                "age_group": "70-74",
+                "swim_time": "40:00",
+                "bike_time": "1:15:00",
+                "run_time": "54:00",
+            }
+        )
+        self.assertTrue(response["valid"])
+        explanation = explain_result(response["result"], locale="es")
+        self.assertIn("los percentiles por segmento", explanation)
+        self.assertIn("Natación 40:00", explanation)
+        self.assertIn("Ciclismo 1:15:00", explanation)
+        self.assertIn("Carrera 54:00", explanation)
+        self.assertIn("total estimado", explanation)
+        self.assertNotIn("perfil conjunto", explanation)
+
     def test_agent_runs_scenario_comparison(self) -> None:
         response = run_query_agent(
             {
