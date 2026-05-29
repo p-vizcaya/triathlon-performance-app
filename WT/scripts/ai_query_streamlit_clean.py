@@ -22,10 +22,13 @@ from scripts.ai_query.explain import explain_result  # noqa: E402
 from scripts.ai_query.normalization import format_seconds, parse_time_to_seconds  # noqa: E402
 from scripts.ai_query.query_agent import run_query_agent  # noqa: E402
 from scripts.ai_query_streamlit import (  # noqa: E402
+    _apply_theme,
+    _brand_header,
     _context_controls,
     _event_comparison_table,
     _guided_payload,
     _language_control,
+    _result_card,
     _run_payload,
     _ui,
 )
@@ -67,8 +70,11 @@ def _show_clean_response(response: dict[str, Any], locale: str = "en") -> None:
     else:
         st.error(text)
     result = response.get("result")
-    if isinstance(result, dict) and result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
-        st.dataframe(_event_comparison_table(result), hide_index=True, use_container_width=True)
+    if isinstance(result, dict):
+        if response.get("valid", False):
+            _result_card(result)
+        if result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
+            st.dataframe(_event_comparison_table(result), hide_index=True, use_container_width=True)
 
 
 def _show_clean_response_inline(response: dict[str, Any], locale: str = "en") -> None:
@@ -80,8 +86,11 @@ def _show_clean_response_inline(response: dict[str, Any], locale: str = "en") ->
     else:
         st.error(text)
     result = response.get("result")
-    if isinstance(result, dict) and result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
-        st.dataframe(_event_comparison_table(result), hide_index=True, use_container_width=True)
+    if isinstance(result, dict):
+        if response.get("valid", False):
+            _result_card(result)
+        if result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
+            st.dataframe(_event_comparison_table(result), hide_index=True, use_container_width=True)
 
 
 def _guided_query(modality: str, sex_category: str, age_group: str, locale: str) -> None:
@@ -288,9 +297,10 @@ def _attribution(locale: str) -> None:
 def main() -> None:
     st.set_page_config(page_title="Triathlon Performance", layout="wide")
     _init_session_state()
-    st.title("Triathlon Performance")
 
     locale = _language_control()
+    _apply_theme()
+    _brand_header(locale)
     modality, sex_category, age_group = _context_controls(locale)
     guided, dialog = st.tabs([_ui(locale, "guided_query"), "Hacer una pregunta" if locale == "es" else "Ask a question"])
 

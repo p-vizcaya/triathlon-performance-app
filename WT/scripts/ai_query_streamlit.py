@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import html
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ from scripts.ai_query.sources import (  # noqa: E402
 
 MAIN_SEGMENTS = ("Swim", "Bike", "Run")
 TYPICALITY_WORKBOOK = SCRIPT_DIR.parent / "outputs" / "WT_Typicality_By_Event_Modality_Sex_AgeGroup_1989_2025.xlsx"
+LOGO_PATH = SCRIPT_DIR.parent / "assets" / "LogoSimple.png"
 CONDITION_OPERATORS = {
     "At least as good as": "at_least_as_good",
     "Slower than": "slower_than",
@@ -69,6 +71,11 @@ UI_TEXT = {
         "available_events": "Available events",
         "event_pick": "Select events",
         "event_missing": "No championship event list is available in this package.",
+        "app_title": "Triathlon Performance Tables",
+        "app_subtitle": "Compare your times with athletes in the same distance, sex, and age group.",
+        "brand": "Global Triathlon Colombia",
+        "query_route": "What do you want to do?",
+        "query_detail": "Choose the specific question",
     },
     "es": {
         "context": "Contexto",
@@ -87,6 +94,57 @@ UI_TEXT = {
         "available_events": "Eventos disponibles",
         "event_pick": "Selecciona eventos",
         "event_missing": "No hay una lista de campeonatos disponible en este paquete.",
+        "app_title": "Tablas de Desempeno en Triatlon",
+        "app_subtitle": "Compara tus tiempos con deportistas de tu misma distancia, sexo y grupo de edad.",
+        "brand": "Global Triathlon Colombia",
+        "query_route": "Que quieres hacer?",
+        "query_detail": "Elige la pregunta especifica",
+    },
+}
+
+QUERY_ROUTES = {
+    "Evaluate a time": (
+        "Total time to percentile",
+        "Segment time to percentile",
+    ),
+    "Find a target time": (
+        "Percentile to total time",
+        "Percentile to segment time",
+    ),
+    "Compare with a championship": (
+        "Direct championship comparison",
+    ),
+    "Analyze segments": (
+        "Estimated total from Swim/Bike/Run",
+        "Full split evaluation",
+        "Compare segments",
+    ),
+    "Improve toward a goal": (
+        "Gap to target percentile",
+        "Required missing segment for target percentile",
+    ),
+    "Advanced / help": (
+        "Conditional segment percentile",
+        "Explain percentile",
+    ),
+}
+
+ROUTE_LABELS = {
+    "en": {
+        "Evaluate a time": "Evaluate a time",
+        "Find a target time": "Find a target time",
+        "Compare with a championship": "Compare with a championship",
+        "Analyze segments": "Analyze segments",
+        "Improve toward a goal": "Improve toward a goal",
+        "Advanced / help": "Advanced / help",
+    },
+    "es": {
+        "Evaluate a time": "Evaluar un tiempo",
+        "Find a target time": "Buscar un tiempo objetivo",
+        "Compare with a championship": "Compararme con un campeonato",
+        "Analyze segments": "Evaluar mis segmentos",
+        "Improve toward a goal": "Mejorar hacia un objetivo",
+        "Advanced / help": "Avanzadas / ayuda",
     },
 }
 
@@ -145,6 +203,154 @@ def _query_label(locale: str, value: str) -> str:
     return QUERY_LABELS.get(locale, QUERY_LABELS["en"]).get(value, value)
 
 
+def _route_label(locale: str, value: str) -> str:
+    return ROUTE_LABELS.get(locale, ROUTE_LABELS["en"]).get(value, value)
+
+
+def _apply_theme() -> None:
+    st.markdown(
+        """
+        <style>
+        :root {
+            --gtc-blue: #1377b9;
+            --gtc-sky: #5f9ed7;
+            --gtc-red: #ef3f3f;
+            --gtc-yellow: #f2d21a;
+            --gtc-ink: #1d2433;
+            --gtc-muted: #667085;
+            --gtc-soft: #f4f8fc;
+        }
+        .block-container {
+            padding-top: 2.2rem;
+            max-width: 1180px;
+        }
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #f6f9fc 0%, #eef4fa 100%);
+        }
+        .gtc-hero {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            padding: 1.2rem 1.35rem;
+            margin-bottom: 1.25rem;
+            border: 1px solid #d8e7f4;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #ffffff 0%, #f4f9fd 100%);
+        }
+        .gtc-logo {
+            width: 96px;
+            height: 96px;
+            object-fit: contain;
+            flex: 0 0 96px;
+        }
+        .gtc-brand {
+            color: var(--gtc-blue);
+            font-size: .82rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            margin-bottom: .25rem;
+        }
+        .gtc-title {
+            color: var(--gtc-ink);
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1.05;
+            font-weight: 800;
+            margin: 0;
+        }
+        .gtc-subtitle {
+            color: var(--gtc-muted);
+            font-size: 1.05rem;
+            margin-top: .5rem;
+            max-width: 760px;
+        }
+        .gtc-disciplines {
+            display: flex;
+            gap: .5rem;
+            flex-wrap: wrap;
+            margin-top: .75rem;
+        }
+        .gtc-chip {
+            border: 1px solid #d7e6f2;
+            border-radius: 999px;
+            padding: .28rem .68rem;
+            color: #27445f;
+            background: #ffffff;
+            font-size: .86rem;
+            font-weight: 650;
+        }
+        .gtc-chip:nth-child(1) { border-left: 4px solid var(--gtc-sky); }
+        .gtc-chip:nth-child(2) { border-left: 4px solid var(--gtc-yellow); }
+        .gtc-chip:nth-child(3) { border-left: 4px solid var(--gtc-red); }
+        .gtc-result-card {
+            border: 1px solid #d8e7f4;
+            border-left: 6px solid var(--gtc-blue);
+            border-radius: 8px;
+            padding: 1rem 1.15rem;
+            background: #ffffff;
+            box-shadow: 0 10px 28px rgba(19, 119, 185, .08);
+            margin: .8rem 0 1rem;
+        }
+        .gtc-result-label {
+            color: var(--gtc-muted);
+            font-size: .85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+        .gtc-result-value {
+            color: var(--gtc-ink);
+            font-size: 2.1rem;
+            line-height: 1.1;
+            font-weight: 800;
+            margin-top: .2rem;
+        }
+        .gtc-result-detail {
+            color: var(--gtc-muted);
+            font-size: .98rem;
+            margin-top: .45rem;
+        }
+        .stButton > button[kind="primary"] {
+            background: var(--gtc-red);
+            border-color: var(--gtc-red);
+        }
+        @media (max-width: 760px) {
+            .gtc-hero { align-items: flex-start; }
+            .gtc-logo { width: 72px; height: 72px; flex-basis: 72px; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _brand_header(locale: str) -> None:
+    logo_html = ""
+    if LOGO_PATH.exists():
+        import base64
+
+        encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+        logo_html = f'<img class="gtc-logo" src="data:image/png;base64,{encoded}" alt="Global Triathlon Colombia logo">'
+    st.markdown(
+        f"""
+        <section class="gtc-hero">
+            {logo_html}
+            <div>
+                <div class="gtc-brand">{html.escape(_ui(locale, "brand"))}</div>
+                <h1 class="gtc-title">{html.escape(_ui(locale, "app_title"))}</h1>
+                <div class="gtc-subtitle">{html.escape(_ui(locale, "app_subtitle"))}</div>
+                <div class="gtc-disciplines">
+                    <span class="gtc-chip">{'Swim' if locale == 'en' else 'Natacion'}</span>
+                    <span class="gtc-chip">{'Bike' if locale == 'en' else 'Ciclismo'}</span>
+                    <span class="gtc-chip">{'Run' if locale == 'en' else 'Carrera'}</span>
+                </div>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _clean_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if value not in (None, "")}
 
@@ -166,11 +372,64 @@ def _show_response(response: dict[str, Any]) -> None:
 
     result = response.get("result")
     if isinstance(result, dict):
+        if response.get("valid", False):
+            _result_card(result)
         if result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
             st.dataframe(_event_comparison_table(result), hide_index=True, use_container_width=True)
         rows = _summary_rows(result)
         if rows:
             st.table(rows)
+
+
+def _result_card(result: dict[str, Any]) -> None:
+    card = _result_card_data(result)
+    if not card:
+        return
+    st.markdown(
+        f"""
+        <div class="gtc-result-card">
+            <div class="gtc-result-label">{html.escape(card['label'])}</div>
+            <div class="gtc-result-value">{html.escape(card['value'])}</div>
+            <div class="gtc-result-detail">{html.escape(card['detail'])}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _result_card_data(result: dict[str, Any]) -> dict[str, str] | None:
+    entity = result.get("entity")
+    context = f"{result.get('modality')} {result.get('sex_label')} {result.get('age_group')}"
+    if entity == "total_time_curve" and "performance_percentile" in result:
+        return {
+            "label": f"{context} | Total time",
+            "value": f"P{float(result['performance_percentile']):.1f}",
+            "detail": f"Total time {result.get('input_total_time')} compared with the reference table.",
+        }
+    if entity == "segment_curve" and "performance_percentile" in result:
+        segment = str(result.get("segment"))
+        return {
+            "label": f"{context} | {segment}",
+            "value": f"P{float(result['performance_percentile']):.1f}",
+            "detail": f"{segment} time {result.get('input_time')} compared with the reference table.",
+        }
+    if entity == "event_curve_comparison":
+        comparisons = result.get("comparisons") or []
+        if not comparisons:
+            return None
+        first = comparisons[0]
+        if result.get("query_type") == "percentile_to_time":
+            return {
+                "label": f"{context} | {result.get('segment')} in {first.get('year')}",
+                "value": str(first.get("estimated_time")),
+                "detail": f"Estimated time for P{float(result.get('percentile')):.1f} in {first.get('event_name')} (n={first.get('n')}).",
+            }
+        return {
+            "label": f"{context} | {result.get('segment')} in {first.get('year')}",
+            "value": f"Position {first.get('estimated_position')} of {first.get('n')}",
+            "detail": f"{result.get('input_time')} is approximately P{float(first.get('performance_percentile')):.1f} in {first.get('event_name')}.",
+        }
+    return None
 
 
 def _event_comparison_table(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -348,22 +607,15 @@ def _percentile_input(label: str, *, key: str) -> float:
 
 
 def _guided_payload(modality: str, sex_category: str, age_group: str, locale: str = "en") -> dict[str, Any] | None:
-    query_options = (
-        "Total time to percentile",
-        "Percentile to total time",
-        "Segment time to percentile",
-        "Percentile to segment time",
-        "Estimated total from Swim/Bike/Run",
-        "Full split evaluation",
-        "Gap to target percentile",
-        "Required missing segment for target percentile",
-        "Compare segments",
-        "Direct championship comparison",
-        "Conditional segment percentile",
-        "Explain percentile",
+    route = st.radio(
+        _ui(locale, "query_route"),
+        tuple(QUERY_ROUTES),
+        format_func=lambda value: _route_label(locale, value),
+        horizontal=True,
     )
+    query_options = QUERY_ROUTES[route]
     query_type = st.selectbox(
-        _ui(locale, "query"),
+        _ui(locale, "query_detail"),
         query_options,
         format_func=lambda value: _query_label(locale, value),
     )
