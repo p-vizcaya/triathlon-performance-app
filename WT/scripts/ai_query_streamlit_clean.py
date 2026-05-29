@@ -23,6 +23,7 @@ from scripts.ai_query.normalization import format_seconds, parse_time_to_seconds
 from scripts.ai_query.query_agent import run_query_agent  # noqa: E402
 from scripts.ai_query_streamlit import (  # noqa: E402
     _context_controls,
+    _event_comparison_table,
     _guided_payload,
     _language_control,
     _run_payload,
@@ -67,7 +68,7 @@ def _show_clean_response(response: dict[str, Any], locale: str = "en") -> None:
         st.error(text)
     result = response.get("result")
     if isinstance(result, dict) and result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
-        st.dataframe(result["comparisons"], hide_index=True, use_container_width=True)
+        st.dataframe(_event_comparison_table(result), hide_index=True, use_container_width=True)
 
 
 def _show_clean_response_inline(response: dict[str, Any], locale: str = "en") -> None:
@@ -80,7 +81,7 @@ def _show_clean_response_inline(response: dict[str, Any], locale: str = "en") ->
         st.error(text)
     result = response.get("result")
     if isinstance(result, dict) and result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
-        st.dataframe(result["comparisons"], hide_index=True, use_container_width=True)
+        st.dataframe(_event_comparison_table(result), hide_index=True, use_container_width=True)
 
 
 def _guided_query(modality: str, sex_category: str, age_group: str, locale: str) -> None:

@@ -318,12 +318,14 @@ def _event_curve_explanation(result: dict[str, Any]) -> str:
         return (
             f"For {_context(result)}, {result['segment']} {result['input_time']} would rank about "
             f"position {first['estimated_position']} of {first['n']} in {first['event_name']} "
-            f"({first['year']}), equivalent to {round_percentile(first['performance_percentile'])}."
+            f"({first['year']}), equivalent to {round_percentile(first['performance_percentile'])}. "
+            f"This is a direct empirical comparison with no event-difficulty adjustment."
         )
     return (
         f"For {_context(result)}, {round_percentile(result['percentile'])} in {result['segment']} "
         f"corresponds to about {first['estimated_time']} in {first['event_name']} "
-        f"({first['year']}), with n={first['n']}."
+        f"({first['year']}), with n={first['n']}. "
+        f"This is a direct empirical championship percentile, not a global-reference equivalent."
     )
 
 
@@ -337,12 +339,14 @@ def _event_curve_explanation_es(result: dict[str, Any]) -> str:
             f"Para {_context(result)}, un {result['segment']} de {result['input_time']} habria quedado "
             f"aproximadamente en la posicion {first['estimated_position']} de {first['n']} en "
             f"{first['event_name']} ({first['year']}), equivalente a "
-            f"{round_percentile(first['performance_percentile'])}."
+            f"{round_percentile(first['performance_percentile'])}. "
+            f"Es una comparacion empirica directa, sin ajuste por dificultad del evento."
         )
     return (
         f"Para {_context(result)}, {round_percentile(result['percentile'])} en {result['segment']} "
         f"corresponde aproximadamente a {first['estimated_time']} en {first['event_name']} "
-        f"({first['year']}), con n={first['n']}."
+        f"({first['year']}), con n={first['n']}. "
+        f"Es un percentil empirico directo del campeonato, no una equivalencia de la referencia global."
     )
 
 

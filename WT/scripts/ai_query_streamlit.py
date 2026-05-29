@@ -46,7 +46,7 @@ QUERY_EXAMPLES = {
     "Gap to target percentile": "Example: current total 2:45:00, target P75.",
     "Required missing segment for target percentile": "Example: given Swim and Bike, find the Run needed for total P75.",
     "Compare segments": "Example: Swim 32:00, Bike 1:15:00, Run 45:00, with optional T1/T2/Total.",
-    "Compare with championship events": "Example: Total 2:18:30 against Gold Coast 2009 and Wollongong 2025.",
+    "Direct championship comparison": "Example: Total 2:18:30 directly against Gold Coast 2009 and Wollongong 2025, with no adjustment.",
     "Conditional segment percentile": "Example: Run 45:00 among athletes whose Swim is at least as good as 32:00.",
     "Explain percentile": "Example: Explain what P75 means for Total or Run.",
 }
@@ -101,7 +101,7 @@ QUERY_LABELS = {
         "Gap to target percentile": "Gap to target percentile",
         "Required missing segment for target percentile": "Required missing segment for target percentile",
         "Compare segments": "Compare segments",
-        "Compare with championship events": "Compare with championship events",
+        "Direct championship comparison": "Direct championship comparison",
         "Conditional segment percentile": "Conditional segment percentile",
         "Explain percentile": "Explain percentile",
     },
@@ -115,7 +115,7 @@ QUERY_LABELS = {
         "Gap to target percentile": "Brecha frente a percentil objetivo",
         "Required missing segment for target percentile": "Segmento faltante para percentil objetivo",
         "Compare segments": "Comparar segmentos",
-        "Compare with championship events": "Comparar con campeonatos",
+        "Direct championship comparison": "Comparacion directa con campeonatos",
         "Conditional segment percentile": "Percentil condicional de segmento",
         "Explain percentile": "Explicar percentil",
     },
@@ -131,7 +131,7 @@ QUERY_EXAMPLES_ES = {
     "Gap to target percentile": "Ejemplo: tiempo total actual 2:45:00, objetivo P75.",
     "Required missing segment for target percentile": "Ejemplo: con Swim y Bike conocidos, encontrar el Run necesario para P75 total.",
     "Compare segments": "Ejemplo: Swim 32:00, Bike 1:15:00, Run 45:00, con T1/T2/Total opcionales.",
-    "Compare with championship events": "Ejemplo: Total 2:18:30 contra Gold Coast 2009 y Wollongong 2025.",
+    "Direct championship comparison": "Ejemplo: Total 2:18:30 directamente contra Gold Coast 2009 y Wollongong 2025, sin ajuste.",
     "Conditional segment percentile": "Ejemplo: Run 45:00 entre atletas cuyo Swim es al menos tan bueno como 32:00.",
     "Explain percentile": "Ejemplo: explicar qué significa P75 en Total o Run.",
 }
@@ -167,10 +167,38 @@ def _show_response(response: dict[str, Any]) -> None:
     result = response.get("result")
     if isinstance(result, dict):
         if result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
-            st.dataframe(result["comparisons"], hide_index=True, use_container_width=True)
+            st.dataframe(_event_comparison_table(result), hide_index=True, use_container_width=True)
         rows = _summary_rows(result)
         if rows:
             st.table(rows)
+
+
+def _event_comparison_table(result: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    if result.get("query_type") == "percentile_to_time":
+        for item in result.get("comparisons", []):
+            rows.append(
+                {
+                    "year": item.get("year"),
+                    "championship": item.get("event_name"),
+                    "n": item.get("n"),
+                    "position": round(float(item["estimated_position"]), 1),
+                    "time": item.get("estimated_time"),
+                }
+            )
+        return rows
+
+    for item in result.get("comparisons", []):
+        rows.append(
+            {
+                "year": item.get("year"),
+                "championship": item.get("event_name"),
+                "n": item.get("n"),
+                "position": item.get("estimated_position"),
+                "percentile": round(float(item["performance_percentile"]), 1),
+            }
+        )
+    return rows
 
 
 def _summary_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -269,30 +297,14 @@ def _championship_event_controls(modality: str, sex_category: str, age_group: st
             st.caption(_ui(locale, "event_missing"))
             return
 
-        options = [_event_label(row) for row in rows]
-        selected = st.multiselect(
-            _ui(locale, "event_pick"),
-            options,
-            default=options[-min(3, len(options)) :],
-        )
-        selected_rows = [row for row, label in zip(rows, options) if label in selected]
-        if not selected_rows:
-            st.caption(_ui(locale, "available_events") + f": {len(rows)}")
-            return
-
-        table_rows = []
-        for row in selected_rows:
-            shift = row.get("median_shift_pct_vs_group")
-            table_rows.append(
-                {
-                    "year": int(row["year"]),
-                    "event": row.get("event"),
-                    "n": int(row["n"]),
-                    "p50": row.get("p50_time"),
-                    "median_shift_%": round(float(shift), 1) if shift not in (None, "") else None,
-                    "note": row.get("review_note") or "",
-                }
-            )
+        st.caption(_ui(locale, "available_events") + f": {len(rows)}")
+        table_rows = [
+            {
+                "year": int(row["year"]),
+                "event": row.get("event"),
+            }
+            for row in rows
+        ]
         st.dataframe(table_rows, hide_index=True, use_container_width=True)
 
 
@@ -346,7 +358,7 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         "Gap to target percentile",
         "Required missing segment for target percentile",
         "Compare segments",
-        "Compare with championship events",
+        "Direct championship comparison",
         "Conditional segment percentile",
         "Explain percentile",
     )
@@ -429,11 +441,18 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
             payload["total_time"] = st.text_input("Total", placeholder="1:21:26")
         return payload
 
-    if query_type == "Compare with championship events":
+    if query_type == "Direct championship comparison":
         segment = st.selectbox("Segment", SEGMENTS, index=list(SEGMENTS).index("Total"))
+        st.caption(
+            "Direct empirical comparison against the selected championship; no event-difficulty adjustment is applied."
+            if locale == "en"
+            else "Comparacion empirica directa contra el campeonato seleccionado; no se aplica ajuste por dificultad del evento."
+        )
         mode = st.radio(
             "Mode" if locale == "en" else "Modo",
-            ("Time to position", "Percentile to time") if locale == "en" else ("Tiempo a posicion", "Percentil a tiempo"),
+            ("Time to event position", "Event percentile to time")
+            if locale == "en"
+            else ("Tiempo a posicion en campeonato", "Percentil del campeonato a tiempo"),
             horizontal=True,
         )
         options = list_event_options(modality, sex_category, age_group, segment, min_n=20)
@@ -445,7 +464,7 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         )
         selected_years = [row["year"] for row, label in zip(options, labels) if label in selected]
         min_n = st.number_input("Minimum n" if locale == "en" else "n minimo", min_value=1, max_value=100, value=20, step=1)
-        if mode in ("Time to position", "Tiempo a posicion"):
+        if mode in ("Time to event position", "Tiempo a posicion en campeonato"):
             time_value = _time_or_sport_unit("Time" if locale == "en" else "Tiempo", segment, modality, key="event_cmp_time")
             return {
                 **base,
