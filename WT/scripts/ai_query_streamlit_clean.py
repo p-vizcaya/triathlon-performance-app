@@ -21,17 +21,26 @@ from scripts.ai_query.llm_client import LLMClientError, answer_natural_language_
 from scripts.ai_query.explain import explain_result  # noqa: E402
 from scripts.ai_query.normalization import format_seconds, parse_time_to_seconds  # noqa: E402
 from scripts.ai_query.query_agent import run_query_agent  # noqa: E402
-from scripts.ai_query_streamlit import (  # noqa: E402
-    _apply_theme,
-    _brand_header,
-    _context_controls,
-    _event_comparison_table,
-    _guided_payload,
-    _language_control,
-    _result_card,
-    _run_payload,
-    _ui,
-)
+from scripts import ai_query_streamlit as shared_ui  # noqa: E402
+
+
+def _noop(*_args: Any, **_kwargs: Any) -> None:
+    return None
+
+
+def _empty_table(_result: dict[str, Any]) -> list[dict[str, Any]]:
+    return []
+
+
+_apply_theme = getattr(shared_ui, "_apply_theme", _noop)
+_brand_header = getattr(shared_ui, "_brand_header", _noop)
+_context_controls = shared_ui._context_controls
+_event_comparison_table = getattr(shared_ui, "_event_comparison_table", _empty_table)
+_guided_payload = shared_ui._guided_payload
+_language_control = shared_ui._language_control
+_result_card = getattr(shared_ui, "_result_card", _noop)
+_run_payload = shared_ui._run_payload
+_ui = shared_ui._ui
 
 
 def _init_session_state() -> None:
