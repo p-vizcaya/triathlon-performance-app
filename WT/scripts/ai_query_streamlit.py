@@ -74,6 +74,7 @@ UI_TEXT = {
         "app_title": "Triathlon Performance Tables",
         "app_subtitle": "Compare your times with athletes in the same distance, sex, and age group.",
         "brand": "Global Triathlon Colombia",
+        "ui_build": "UI build 2026-05-29",
         "query_route": "What do you want to do?",
         "query_detail": "Choose the specific question",
     },
@@ -97,6 +98,7 @@ UI_TEXT = {
         "app_title": "Tablas de Desempe\u00f1o en Triatl\u00f3n",
         "app_subtitle": "Compara tus tiempos con deportistas de tu misma distancia, sexo y grupo de edad.",
         "brand": "Global Triathlon Colombia",
+        "ui_build": "Versi\u00f3n UI 2026-05-29",
         "query_route": "\u00bfQu\u00e9 quieres hacer?",
         "query_detail": "Elige la pregunta espec\u00edfica",
     },
@@ -264,6 +266,11 @@ def _apply_theme() -> None:
             margin-top: .5rem;
             max-width: 760px;
         }
+        .gtc-build {
+            color: var(--gtc-muted);
+            font-size: .76rem;
+            margin-top: .45rem;
+        }
         .gtc-disciplines {
             display: flex;
             gap: .5rem;
@@ -339,6 +346,7 @@ def _brand_header(locale: str) -> None:
                 <div class="gtc-brand">{html.escape(_ui(locale, "brand"))}</div>
                 <h1 class="gtc-title">{html.escape(_ui(locale, "app_title"))}</h1>
                 <div class="gtc-subtitle">{html.escape(_ui(locale, "app_subtitle"))}</div>
+                <div class="gtc-build">{html.escape(_ui(locale, "ui_build"))}</div>
                 <div class="gtc-disciplines">
                     <span class="gtc-chip">{'Swim' if locale == 'en' else 'Nataci\u00f3n'}</span>
                     <span class="gtc-chip">{'Bike' if locale == 'en' else 'Ciclismo'}</span>
