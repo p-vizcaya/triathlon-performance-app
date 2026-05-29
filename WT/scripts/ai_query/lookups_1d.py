@@ -17,7 +17,7 @@ from .normalization import (
     parse_segment_time_to_seconds,
     parse_time_to_seconds,
 )
-from .query_index import get_segment_curve_from_index, get_total_curve_from_index
+from .query_index import INDEX_PATH, get_segment_curve_from_index, get_total_curve_from_index
 from .sources import get_source
 from .uncertainty import uncertainty_for_percentile, uncertainty_for_time
 
@@ -120,6 +120,22 @@ def _segment_curve_rows(modality: str, sex_label: str, age_group: str, segment: 
         for row in rows
     ]
     return sorted(points, key=lambda point: point[0])
+
+
+def _segment_points_and_source(
+    modality: str,
+    sex_label: str,
+    age_group: str,
+    segment: str,
+) -> tuple[list[tuple[float, float]] | None, str | dict[str, str] | None, str | None, dict[str, Any] | None]:
+    indexed = get_segment_curve_from_index(modality, sex_label, age_group, segment)
+    if indexed is not None:
+        return sorted(indexed, key=lambda point: point[0]), str(INDEX_PATH), "WT_1D_Query_Index", None
+
+    coverage = validate_query_inputs("segment_curve", modality, sex_label, age_group, segment=segment)
+    if not coverage.valid:
+        return None, coverage.source, coverage.sheet, coverage.to_dict()
+    return _segment_curve_rows(modality, sex_label, age_group, segment), coverage.source, coverage.sheet, None
 
 
 def _interpolate_y(points: list[tuple[float, float]], x: float) -> tuple[float, bool, str | None]:
@@ -278,12 +294,12 @@ def get_segment_percentile_by_time(
     age_group = normalize_age_group(age_group)
     segment = normalize_segment(segment)
     seconds = parse_segment_time_to_seconds(modality, segment, segment_time)
-    coverage = validate_query_inputs("segment_curve", modality, sex_label, age_group, segment=segment)
-    if not coverage.valid:
-        return coverage.to_dict()
+    points, source, sheet, invalid = _segment_points_and_source(modality, sex_label, age_group, segment)
+    if invalid is not None:
+        return invalid
 
     percentile, interpolated, range_status = _interpolate_y(
-        points := _segment_curve_rows(modality, sex_label, age_group, segment),
+        points,
         seconds,
     )
     return {
@@ -292,8 +308,8 @@ def get_segment_percentile_by_time(
             modality=modality,
             sex_label=sex_label,
             age_group=age_group,
-            source=coverage.source,
-            sheet=coverage.sheet,
+            source=source,
+            sheet=sheet,
             interpolated=interpolated,
             range_status=range_status,
         ),
@@ -325,12 +341,12 @@ def get_segment_time_by_percentile(
     age_group = normalize_age_group(age_group)
     segment = normalize_segment(segment)
     percentile_value = _normalize_percentile(percentile)
-    coverage = validate_query_inputs("segment_curve", modality, sex_label, age_group, segment=segment)
-    if not coverage.valid:
-        return coverage.to_dict()
+    points, source, sheet, invalid = _segment_points_and_source(modality, sex_label, age_group, segment)
+    if invalid is not None:
+        return invalid
 
     seconds, interpolated, range_status = _interpolate_x(
-        points := _segment_curve_rows(modality, sex_label, age_group, segment),
+        points,
         percentile_value,
     )
     return {
@@ -339,8 +355,8 @@ def get_segment_time_by_percentile(
             modality=modality,
             sex_label=sex_label,
             age_group=age_group,
-            source=coverage.source,
-            sheet=coverage.sheet,
+            source=source,
+            sheet=sheet,
             interpolated=interpolated,
             range_status=range_status,
         ),
