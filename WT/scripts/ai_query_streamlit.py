@@ -19,6 +19,7 @@ if str(SCRIPT_DIR.parent) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR.parent))
 
 from scripts.ai_query.llm_client import LLMClientError, answer_natural_language_query  # noqa: E402
+from scripts.ai_query.event_curves import list_event_options  # noqa: E402
 from scripts.ai_query.query_agent import run_query_agent  # noqa: E402
 from scripts.ai_query.sources import (  # noqa: E402
     SEGMENTS,
@@ -28,6 +29,7 @@ from scripts.ai_query.sources import (  # noqa: E402
 
 
 MAIN_SEGMENTS = ("Swim", "Bike", "Run")
+TYPICALITY_WORKBOOK = SCRIPT_DIR.parent / "outputs" / "WT_Typicality_By_Event_Modality_Sex_AgeGroup_1989_2025.xlsx"
 CONDITION_OPERATORS = {
     "At least as good as": "at_least_as_good",
     "Slower than": "slower_than",
@@ -44,6 +46,7 @@ QUERY_EXAMPLES = {
     "Gap to target percentile": "Example: current total 2:45:00, target P75.",
     "Required missing segment for target percentile": "Example: given Swim and Bike, find the Run needed for total P75.",
     "Compare segments": "Example: Swim 32:00, Bike 1:15:00, Run 45:00, with optional T1/T2/Total.",
+    "Compare with championship events": "Example: Total 2:18:30 against Gold Coast 2009 and Wollongong 2025.",
     "Conditional segment percentile": "Example: Run 45:00 among athletes whose Swim is at least as good as 32:00.",
     "Explain percentile": "Example: Explain what P75 means for Total or Run.",
 }
@@ -62,6 +65,10 @@ UI_TEXT = {
         "payload": "Payload",
         "get_answer": "Get answer",
         "ask": "Ask",
+        "championships": "Championships to compare",
+        "available_events": "Available events",
+        "event_pick": "Select events",
+        "event_missing": "No championship event list is available in this package.",
     },
     "es": {
         "context": "Contexto",
@@ -76,6 +83,10 @@ UI_TEXT = {
         "payload": "Payload",
         "get_answer": "Obtener respuesta",
         "ask": "Preguntar",
+        "championships": "Campeonatos para comparar",
+        "available_events": "Eventos disponibles",
+        "event_pick": "Selecciona eventos",
+        "event_missing": "No hay una lista de campeonatos disponible en este paquete.",
     },
 }
 
@@ -90,6 +101,7 @@ QUERY_LABELS = {
         "Gap to target percentile": "Gap to target percentile",
         "Required missing segment for target percentile": "Required missing segment for target percentile",
         "Compare segments": "Compare segments",
+        "Compare with championship events": "Compare with championship events",
         "Conditional segment percentile": "Conditional segment percentile",
         "Explain percentile": "Explain percentile",
     },
@@ -103,6 +115,7 @@ QUERY_LABELS = {
         "Gap to target percentile": "Brecha frente a percentil objetivo",
         "Required missing segment for target percentile": "Segmento faltante para percentil objetivo",
         "Compare segments": "Comparar segmentos",
+        "Compare with championship events": "Comparar con campeonatos",
         "Conditional segment percentile": "Percentil condicional de segmento",
         "Explain percentile": "Explicar percentil",
     },
@@ -118,6 +131,7 @@ QUERY_EXAMPLES_ES = {
     "Gap to target percentile": "Ejemplo: tiempo total actual 2:45:00, objetivo P75.",
     "Required missing segment for target percentile": "Ejemplo: con Swim y Bike conocidos, encontrar el Run necesario para P75 total.",
     "Compare segments": "Ejemplo: Swim 32:00, Bike 1:15:00, Run 45:00, con T1/T2/Total opcionales.",
+    "Compare with championship events": "Ejemplo: Total 2:18:30 contra Gold Coast 2009 y Wollongong 2025.",
     "Conditional segment percentile": "Ejemplo: Run 45:00 entre atletas cuyo Swim es al menos tan bueno como 32:00.",
     "Explain percentile": "Ejemplo: explicar qué significa P75 en Total o Run.",
 }
@@ -152,6 +166,8 @@ def _show_response(response: dict[str, Any]) -> None:
 
     result = response.get("result")
     if isinstance(result, dict):
+        if result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
+            st.dataframe(result["comparisons"], hide_index=True, use_container_width=True)
         rows = _summary_rows(result)
         if rows:
             st.table(rows)
@@ -193,12 +209,100 @@ def _language_control() -> str:
     return "es" if label == "Español" else "en"
 
 
+@st.cache_data(show_spinner=False)
+def _load_event_typicality(path: str) -> list[dict[str, Any]]:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError:
+        return []
+
+    workbook = Path(path)
+    if not workbook.exists():
+        return []
+
+    columns = [
+        "modality",
+        "sex",
+        "age_group",
+        "year",
+        "n",
+        "p50_time",
+        "median_shift_pct_vs_group",
+        "rms_log_quantile_diff",
+        "review_note",
+        "source_files",
+    ]
+    try:
+        data = pd.read_excel(workbook, sheet_name="Event_Typicality", usecols=columns)
+    except Exception:
+        return []
+
+    data["source_files"] = data["source_files"].fillna("").astype(str)
+    data["event"] = (
+        data["source_files"]
+        .str.split(";")
+        .str[0]
+        .str.replace(".xlsx", "", regex=False)
+        .str.strip()
+    )
+    data["review_note"] = data["review_note"].fillna("").astype(str)
+    data = data.sort_values(["modality", "sex", "age_group", "year"])
+    return data.to_dict("records")
+
+
+def _event_label(row: dict[str, Any]) -> str:
+    event = str(row.get("event") or row.get("source_files") or row.get("year"))
+    return f"{int(row['year'])} - {event}"
+
+
+def _championship_event_controls(modality: str, sex_category: str, age_group: str, locale: str) -> None:
+    event_sex = "M" if sex_category == "O" else sex_category
+    rows = [
+        row
+        for row in _load_event_typicality(str(TYPICALITY_WORKBOOK))
+        if row.get("modality") == modality
+        and row.get("sex") == event_sex
+        and row.get("age_group") == age_group
+    ]
+    with st.sidebar.expander(_ui(locale, "championships"), expanded=False):
+        if not rows:
+            st.caption(_ui(locale, "event_missing"))
+            return
+
+        options = [_event_label(row) for row in rows]
+        selected = st.multiselect(
+            _ui(locale, "event_pick"),
+            options,
+            default=options[-min(3, len(options)) :],
+        )
+        selected_rows = [row for row, label in zip(rows, options) if label in selected]
+        if not selected_rows:
+            st.caption(_ui(locale, "available_events") + f": {len(rows)}")
+            return
+
+        table_rows = []
+        for row in selected_rows:
+            shift = row.get("median_shift_pct_vs_group")
+            table_rows.append(
+                {
+                    "year": int(row["year"]),
+                    "event": row.get("event"),
+                    "n": int(row["n"]),
+                    "p50": row.get("p50_time"),
+                    "median_shift_%": round(float(shift), 1) if shift not in (None, "") else None,
+                    "note": row.get("review_note") or "",
+                }
+            )
+        st.dataframe(table_rows, hide_index=True, use_container_width=True)
+
+
 def _context_controls(locale: str = "en") -> tuple[str, str, str]:
     st.sidebar.header(_ui(locale, "context"))
     modality = st.sidebar.selectbox(_ui(locale, "modality"), ("Standard", "Sprint"))
     sex_category = st.sidebar.selectbox(_ui(locale, "sex"), ("O", "F"), help="O includes Open/Male; F is Female.")
     age_groups = STANDARD_AGE_GROUPS if modality == "Standard" else SPRINT_AGE_GROUPS
     age_group = st.sidebar.selectbox(_ui(locale, "age_group"), age_groups)
+    _championship_event_controls(modality, sex_category, age_group, locale)
     return modality, sex_category, age_group
 
 
@@ -242,6 +346,7 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         "Gap to target percentile",
         "Required missing segment for target percentile",
         "Compare segments",
+        "Compare with championship events",
         "Conditional segment percentile",
         "Explain percentile",
     )
@@ -323,6 +428,42 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         with col6:
             payload["total_time"] = st.text_input("Total", placeholder="1:21:26")
         return payload
+
+    if query_type == "Compare with championship events":
+        segment = st.selectbox("Segment", SEGMENTS, index=list(SEGMENTS).index("Total"))
+        mode = st.radio(
+            "Mode" if locale == "en" else "Modo",
+            ("Time to position", "Percentile to time") if locale == "en" else ("Tiempo a posicion", "Percentil a tiempo"),
+            horizontal=True,
+        )
+        options = list_event_options(modality, sex_category, age_group, segment, min_n=20)
+        labels = [f"{row['year']} - {row['event_name']} (n={row['n']})" for row in options]
+        selected = st.multiselect(
+            "Championships" if locale == "en" else "Campeonatos",
+            labels,
+            default=labels[-min(3, len(labels)) :],
+        )
+        selected_years = [row["year"] for row, label in zip(options, labels) if label in selected]
+        min_n = st.number_input("Minimum n" if locale == "en" else "n minimo", min_value=1, max_value=100, value=20, step=1)
+        if mode in ("Time to position", "Tiempo a posicion"):
+            time_value = _time_or_sport_unit("Time" if locale == "en" else "Tiempo", segment, modality, key="event_cmp_time")
+            return {
+                **base,
+                "intent": "event_time_to_position",
+                "segment": segment,
+                "time_value": time_value,
+                "event_years": selected_years,
+                "min_n": int(min_n),
+            }
+        percentile = _percentile_input("Percentile" if locale == "en" else "Percentil", key="event_cmp_percentile")
+        return {
+            **base,
+            "intent": "event_time_by_percentile",
+            "segment": segment,
+            "percentile": percentile,
+            "event_years": selected_years,
+            "min_n": int(min_n),
+        }
 
     if query_type == "Conditional segment percentile":
         target_segment = st.selectbox("Target segment", MAIN_SEGMENTS, index=2)

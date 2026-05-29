@@ -65,6 +65,9 @@ def _show_clean_response(response: dict[str, Any], locale: str = "en") -> None:
         st.success(text)
     else:
         st.error(text)
+    result = response.get("result")
+    if isinstance(result, dict) and result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
+        st.dataframe(result["comparisons"], hide_index=True, use_container_width=True)
 
 
 def _show_clean_response_inline(response: dict[str, Any], locale: str = "en") -> None:
@@ -75,6 +78,9 @@ def _show_clean_response_inline(response: dict[str, Any], locale: str = "en") ->
         st.success(text)
     else:
         st.error(text)
+    result = response.get("result")
+    if isinstance(result, dict) and result.get("entity") == "event_curve_comparison" and result.get("comparisons"):
+        st.dataframe(result["comparisons"], hide_index=True, use_container_width=True)
 
 
 def _guided_query(modality: str, sex_category: str, age_group: str, locale: str) -> None:

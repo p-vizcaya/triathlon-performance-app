@@ -205,6 +205,22 @@ AVAILABLE_TOOLS: tuple[dict[str, Any], ...] = (
         "do_not_infer": ("sex_category", "age_group", "segment"),
     },
     {
+        "name": "event_time_to_position",
+        "description": "Compare a total or segment time against empirical championship event curves and return n, estimated position, and percentile for each selected event.",
+        "required": (*COMMON_REQUIRED, "segment", "time_value"),
+        "clarify_if_missing": (*COMMON_REQUIRED, "segment", "time_value"),
+        "do_not_infer": ("sex_category", "age_group", "segment"),
+        "optional": ("event_years", "min_n"),
+    },
+    {
+        "name": "event_time_by_percentile",
+        "description": "Return the empirical time required for a target percentile in each selected championship event curve.",
+        "required": (*COMMON_REQUIRED, "segment", "percentile"),
+        "clarify_if_missing": (*COMMON_REQUIRED, "segment", "percentile"),
+        "do_not_infer": ("sex_category", "age_group", "segment"),
+        "optional": ("event_years", "min_n"),
+    },
+    {
         "name": "explain_percentile",
         "description": "Explain what a percentile means without performing a new lookup.",
         "required": ("percentile",),

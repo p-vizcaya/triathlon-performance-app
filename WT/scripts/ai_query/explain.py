@@ -309,6 +309,43 @@ def _condition_text_es(condition: dict[str, Any]) -> str:
     return f"{segment} al menos tan bueno como el umbral {condition['performance_percentile']:.1f}"
 
 
+def _event_curve_explanation(result: dict[str, Any]) -> str:
+    comparisons = result.get("comparisons") or []
+    if not comparisons:
+        return str(result.get("message", "No matching championship event curves are available."))
+    first = comparisons[0]
+    if result.get("query_type") == "time_to_position":
+        return (
+            f"For {_context(result)}, {result['segment']} {result['input_time']} would rank about "
+            f"position {first['estimated_position']} of {first['n']} in {first['event_name']} "
+            f"({first['year']}), equivalent to {round_percentile(first['performance_percentile'])}."
+        )
+    return (
+        f"For {_context(result)}, {round_percentile(result['percentile'])} in {result['segment']} "
+        f"corresponds to about {first['estimated_time']} in {first['event_name']} "
+        f"({first['year']}), with n={first['n']}."
+    )
+
+
+def _event_curve_explanation_es(result: dict[str, Any]) -> str:
+    comparisons = result.get("comparisons") or []
+    if not comparisons:
+        return str(result.get("message", "No hay curvas de campeonatos disponibles para esta consulta."))
+    first = comparisons[0]
+    if result.get("query_type") == "time_to_position":
+        return (
+            f"Para {_context(result)}, un {result['segment']} de {result['input_time']} habria quedado "
+            f"aproximadamente en la posicion {first['estimated_position']} de {first['n']} en "
+            f"{first['event_name']} ({first['year']}), equivalente a "
+            f"{round_percentile(first['performance_percentile'])}."
+        )
+    return (
+        f"Para {_context(result)}, {round_percentile(result['percentile'])} en {result['segment']} "
+        f"corresponde aproximadamente a {first['estimated_time']} en {first['event_name']} "
+        f"({first['year']}), con n={first['n']}."
+    )
+
+
 def _pair_explanation(result: dict[str, Any]) -> str:
     return (
         f"For {_context(result)}, the {result['pair']} combination "
@@ -356,6 +393,8 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
             return _explain_percentile_es(result)
         if entity == "conditional_segment_percentile":
             return _conditional_explanation_es(result)
+        if entity == "event_curve_comparison":
+            return _event_curve_explanation_es(result)
         return "La consulta se completo, pero no hay una plantilla de explicacion para este tipo de resultado."
     if locale != "en":
         raise ValueError("Only English and Spanish explanations are currently supported")
@@ -380,6 +419,8 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
         return _explain_percentile(result)
     if entity == "conditional_segment_percentile":
         return str(result.get("summary", "Conditional percentile completed."))
+    if entity == "event_curve_comparison":
+        return _event_curve_explanation(result)
     if entity == "segment_pair_plane":
         return _pair_explanation(result)
     if entity == "sbr_cube":

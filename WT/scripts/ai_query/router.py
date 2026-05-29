@@ -12,6 +12,7 @@ from .derived_totals import (
 )
 from .analysis_intents import compare_segments, explain_percentile, gap_to_target_percentile
 from .conditional import conditional_segment_percentile_from_joint
+from .event_curves import compare_percentile_to_event_curves, compare_time_to_event_curves
 from .explain import explain_result
 from .lookups_1d import (
     get_segment_percentile_by_time,
@@ -129,6 +130,14 @@ def route_query(payload: dict[str, Any], *, explain: bool = False) -> dict[str, 
             compare_segments,
             ("modality", "sex_category", "age_group", "swim_time", "bike_time", "run_time", "t1_time", "t2_time", "total_time"),
         ),
+        "event_time_to_position": (
+            compare_time_to_event_curves,
+            ("modality", "sex_category", "age_group", "segment", "time_value", "event_years", "min_n"),
+        ),
+        "event_time_by_percentile": (
+            compare_percentile_to_event_curves,
+            ("modality", "sex_category", "age_group", "segment", "percentile", "event_years", "min_n"),
+        ),
         "explain_percentile": (
             explain_percentile,
             ("percentile",),
@@ -215,6 +224,25 @@ def route_query(payload: dict[str, Any], *, explain: bool = False) -> dict[str, 
         if missing:
             return _missing_result(intent, missing)
         result = explain_percentile(payload["percentile"], scope=payload.get("scope") or payload.get("segment"))
+        if explain:
+            result = {**result, "explanation": explain_result(result)}
+        return result
+
+    if intent in ("event_time_to_position", "event_time_by_percentile"):
+        lookup_field = "time_value" if intent == "event_time_to_position" else "percentile"
+        missing = _required(payload, "modality", "sex_category", "age_group", "segment", lookup_field)
+        if missing:
+            return _missing_result(intent, missing)
+        function = compare_time_to_event_curves if intent == "event_time_to_position" else compare_percentile_to_event_curves
+        result = function(
+            payload["modality"],
+            payload["sex_category"],
+            payload["age_group"],
+            payload["segment"],
+            payload[lookup_field],
+            event_years=payload.get("event_years"),
+            min_n=int(payload.get("min_n") or 20),
+        )
         if explain:
             result = {**result, "explanation": explain_result(result)}
         return result
