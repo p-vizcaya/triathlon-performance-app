@@ -367,8 +367,74 @@ def _parse_common_context(user_text: str) -> dict[str, str] | None:
     }
 
 
+def _context_payload(context: dict[str, Any] | None) -> dict[str, str] | None:
+    if not isinstance(context, dict):
+        return None
+    try:
+        return {
+            "modality": normalize_modality(context["modality"]),
+            "sex_category": normalize_sex_category(context["sex_category"]),
+            "age_group": normalize_age_group(context["age_group"]),
+        }
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
 def _time_pattern() -> str:
     return r"\d{1,2}:\d{2}(?::\d{2})?"
+
+
+def _deterministic_segment_percentile(user_text: str, context: dict[str, Any] | None) -> dict[str, Any] | None:
+    text = user_text.lower()
+    if not re.search(r"\bpercentil|percentile\b", text):
+        return None
+
+    segment_aliases = {
+        "swim": "Swim",
+        "natacion": "Swim",
+        "natación": "Swim",
+        "bike": "Bike",
+        "bici": "Bike",
+        "ciclismo": "Bike",
+        "run": "Run",
+        "carrera": "Run",
+        "atletismo": "Run",
+    }
+    segment = None
+    for alias, canonical in segment_aliases.items():
+        if re.search(rf"\b{re.escape(alias)}\b", text):
+            segment = canonical
+            break
+    if segment is None:
+        return None
+
+    time_re = _time_pattern()
+    patterns = [
+        rf"\b(?:{segment.lower()}|carrera|atletismo|nataci[oó]n|bici|ciclismo|swim|bike|run)\s+(?:de\s+)?({time_re})\b",
+        rf"\b(?:tiempo|time)\s+(?:de\s+)?({time_re})\s+(?:en|de|for|in)\s+(?:la\s+|el\s+)?(?:{segment.lower()}|carrera|atletismo|nataci[oó]n|bici|ciclismo|swim|bike|run)\b",
+        rf"\b({time_re})\s+(?:en|de|for|in)\s+(?:la\s+|el\s+)?(?:{segment.lower()}|carrera|atletismo|nataci[oó]n|bici|ciclismo|swim|bike|run)\b",
+    ]
+    segment_time = None
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            segment_time = match.group(1)
+            break
+    if segment_time is None:
+        return None
+
+    base = _parse_common_context(user_text) or _context_payload(context)
+    if base is None:
+        return None
+    return {
+        "type": "tool_payload",
+        "payload": {
+            **base,
+            "intent": "segment_percentile_by_time",
+            "segment": segment,
+            "segment_time": segment_time,
+        },
+    }
 
 
 def _deterministic_conditional_percentile(user_text: str) -> dict[str, Any] | None:
@@ -573,6 +639,9 @@ def parse_natural_language_query(
     deterministic_sbr = _deterministic_sbr_joint(user_text)
     if deterministic_sbr:
         return validate_parsed_payload(deterministic_sbr)
+    deterministic_segment = _deterministic_segment_percentile(user_text, context)
+    if deterministic_segment:
+        return validate_parsed_payload(deterministic_segment)
     payload = _responses_payload(user_text, context, _model_name(model))
     response = transport(payload) if transport else _post_openai_responses(payload, api_key=api_key, timeout=timeout)
     parsed = _strip_nulls(_parse_json_text(_extract_response_text(response)))
