@@ -297,7 +297,22 @@ def _event_curve_explanation(result: dict[str, Any]) -> str:
     comparisons = result.get("comparisons") or []
     if not comparisons:
         return str(result.get("message", "No matching championship event curves are available."))
-    first = comparisons[0]
+    first = next((item for item in comparisons if item.get("valid", True)), comparisons[0])
+    if not first.get("valid", True):
+        event = f"{first.get('event_name')} ({first.get('year')})"
+        if result.get("query_type") == "time_to_position":
+            return (
+                f"For {_context(result)}, {result['segment']} {result['input_time']} is outside the "
+                f"empirical range observed in {event}. The table covers "
+                f"{first.get('empirical_min_time')} to {first.get('empirical_max_time')} "
+                f"(n={first.get('n')}). No extrapolation is applied."
+            )
+        return (
+            f"For {_context(result)}, {round_percentile(result['percentile'])} in {result['segment']} is outside "
+            f"the empirical percentile support observed in {event}. The table covers approximately "
+            f"{round_percentile(first.get('p_min'))} to {round_percentile(first.get('p_max'))} "
+            f"(n={first.get('n')}). No extrapolation is applied."
+        )
     if result.get("query_type") == "time_to_position":
         return (
             f"For {_context(result)}, {result['segment']} {result['input_time']} would rank about "
@@ -317,7 +332,22 @@ def _event_curve_explanation_es(result: dict[str, Any]) -> str:
     comparisons = result.get("comparisons") or []
     if not comparisons:
         return str(result.get("message", "No hay curvas de campeonatos disponibles para esta consulta."))
-    first = comparisons[0]
+    first = next((item for item in comparisons if item.get("valid", True)), comparisons[0])
+    if not first.get("valid", True):
+        event = f"{first.get('event_name')} ({first.get('year')})"
+        if result.get("query_type") == "time_to_position":
+            return (
+                f"Para {_context(result)}, un {result['segment']} de {result['input_time']} esta fuera del "
+                f"rango empirico observado en {event}. La tabla cubre de "
+                f"{first.get('empirical_min_time')} a {first.get('empirical_max_time')} "
+                f"(n={first.get('n')}). No se extrapola."
+            )
+        return (
+            f"Para {_context(result)}, {round_percentile(result['percentile'])} en {result['segment']} esta fuera "
+            f"del soporte empirico de percentiles observado en {event}. La tabla cubre aproximadamente de "
+            f"{round_percentile(first.get('p_min'))} a {round_percentile(first.get('p_max'))} "
+            f"(n={first.get('n')}). No se extrapola."
+        )
     if result.get("query_type") == "time_to_position":
         return (
             f"Para {_context(result)}, un {result['segment']} de {result['input_time']} habria quedado "
@@ -357,6 +387,8 @@ def _sbr_explanation(result: dict[str, Any]) -> str:
 
 def explain_result(result: dict[str, Any], locale: str = "en") -> str:
     if not result.get("valid", True):
+        if result.get("entity") == "event_curve_comparison":
+            return _event_curve_explanation_es(result) if locale == "es" else _event_curve_explanation(result)
         return _invalid_message(result)
 
     entity = result.get("entity")

@@ -134,6 +134,26 @@ class QueryAgentTests(unittest.TestCase):
         self.assertGreaterEqual(comparison["n"], 20)
         self.assertIn("estimated_position", comparison)
 
+    def test_agent_rejects_event_time_outside_empirical_range(self) -> None:
+        response = run_query_agent(
+            {
+                "intent": "event_time_to_position",
+                "modality": "Standard",
+                "sex_category": "O",
+                "age_group": "70-74",
+                "segment": "Bike",
+                "time_value": "1:15:00",
+                "event_years": [2023],
+                "min_n": 20,
+            }
+        )
+        self.assertFalse(response["valid"])
+        self.assertEqual(response["reason"], "outside_empirical_range")
+        self.assertIn("No extrapolation", response["message"])
+        comparison = response["result"]["comparisons"][0]
+        self.assertFalse(comparison["valid"])
+        self.assertEqual(comparison["empirical_min_time"], "1:17:41")
+
     def test_agent_runs_event_time_by_percentile(self) -> None:
         response = run_query_agent(
             {

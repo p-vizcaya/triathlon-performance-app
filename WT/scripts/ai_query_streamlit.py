@@ -425,7 +425,21 @@ def _result_card_data(result: dict[str, Any]) -> dict[str, str] | None:
         comparisons = result.get("comparisons") or []
         if not comparisons:
             return None
-        first = comparisons[0]
+        first = next((item for item in comparisons if item.get("valid", True)), comparisons[0])
+        if not first.get("valid", True):
+            detail = first.get("message") or result.get("message") or "Outside the empirical range."
+            if first.get("empirical_min_time") and first.get("empirical_max_time"):
+                detail = (
+                    f"{detail} Range: {first.get('empirical_min_time')} to "
+                    f"{first.get('empirical_max_time')} (n={first.get('n')})."
+                )
+            elif first.get("p_min") is not None and first.get("p_max") is not None:
+                detail = f"{detail} Range: P{float(first.get('p_min')):.1f} to P{float(first.get('p_max')):.1f} (n={first.get('n')})."
+            return {
+                "label": f"{context} | {result.get('segment')} in {first.get('year')}",
+                "value": "Outside range",
+                "detail": detail,
+            }
         if result.get("query_type") == "percentile_to_time":
             return {
                 "label": f"{context} | {result.get('segment')} in {first.get('year')}",
@@ -444,6 +458,19 @@ def _event_comparison_table(result: dict[str, Any]) -> list[dict[str, Any]]:
     rows = []
     if result.get("query_type") == "percentile_to_time":
         for item in result.get("comparisons", []):
+            if not item.get("valid", True):
+                rows.append(
+                    {
+                        "year": item.get("year"),
+                        "championship": item.get("event_name"),
+                        "n": item.get("n"),
+                        "position": None,
+                        "time": None,
+                        "status": item.get("message") or "Outside empirical range",
+                        "range": _event_range_text(item),
+                    }
+                )
+                continue
             rows.append(
                 {
                     "year": item.get("year"),
@@ -456,6 +483,19 @@ def _event_comparison_table(result: dict[str, Any]) -> list[dict[str, Any]]:
         return rows
 
     for item in result.get("comparisons", []):
+        if not item.get("valid", True):
+            rows.append(
+                {
+                    "year": item.get("year"),
+                    "championship": item.get("event_name"),
+                    "n": item.get("n"),
+                    "position": None,
+                    "percentile": None,
+                    "status": item.get("message") or "Outside empirical range",
+                    "range": _event_range_text(item),
+                }
+            )
+            continue
         rows.append(
             {
                 "year": item.get("year"),
@@ -466,6 +506,14 @@ def _event_comparison_table(result: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def _event_range_text(item: dict[str, Any]) -> str | None:
+    if item.get("empirical_min_time") and item.get("empirical_max_time"):
+        return f"{item.get('empirical_min_time')} to {item.get('empirical_max_time')}"
+    if item.get("p_min") is not None and item.get("p_max") is not None:
+        return f"P{float(item.get('p_min')):.1f} to P{float(item.get('p_max')):.1f}"
+    return None
 
 
 def _summary_rows(result: dict[str, Any]) -> list[dict[str, Any]]:

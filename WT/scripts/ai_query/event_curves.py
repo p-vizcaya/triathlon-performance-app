@@ -277,7 +277,8 @@ def _comparison_result(
     input_time: str | None = None,
     percentile: float | None = None,
 ) -> dict[str, Any]:
-    valid = bool(comparisons)
+    valid_comparisons = [item for item in comparisons if item.get("valid", True)]
+    valid = bool(valid_comparisons)
     result = {
         "valid": valid,
         "entity": "event_curve_comparison",
@@ -296,8 +297,30 @@ def _comparison_result(
     if percentile is not None:
         result["percentile"] = percentile
     if not valid:
-        result["reason"] = "no_matching_event_curves"
-        result["message"] = "No matching championship event curves are available for this context and minimum n."
+        if comparisons:
+            first = comparisons[0]
+            result["reason"] = first.get("reason", "outside_empirical_range")
+            event_label = f"{first.get('event_name')} ({first.get('year')})"
+            if query_type == "time_to_position" and first.get("empirical_min_time") and first.get("empirical_max_time"):
+                result["message"] = (
+                    f"The requested {segment} time is outside the empirical range observed in {event_label}. "
+                    f"The table covers {first.get('empirical_min_time')} to {first.get('empirical_max_time')} "
+                    f"(n={first.get('n')}). No extrapolation is applied."
+                )
+            elif query_type == "percentile_to_time" and first.get("p_min") is not None and first.get("p_max") is not None:
+                result["message"] = (
+                    f"The requested {segment} percentile is outside the empirical support observed in {event_label}. "
+                    f"The table covers P{float(first.get('p_min')):.1f} to P{float(first.get('p_max')):.1f} "
+                    f"(n={first.get('n')}). No extrapolation is applied."
+                )
+            else:
+                result["message"] = first.get(
+                    "message",
+                    "The requested value is outside the selected championship's empirical range.",
+                )
+        else:
+            result["reason"] = "no_matching_event_curves"
+            result["message"] = "No matching championship event curves are available for this context and minimum n."
     return result
 
 
