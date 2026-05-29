@@ -34,21 +34,8 @@ def _range_note_es(result: dict[str, Any]) -> str:
 
 
 def _uncertainty_note(result: dict[str, Any]) -> str:
-    uncertainty = result.get("uncertainty")
-    if not isinstance(uncertainty, dict):
-        return ""
-    if "recommended_time_fast" in uncertainty and "recommended_time_slow" in uncertainty:
-        return (
-            f" In typically easier or harder championships, the equivalent time is approximately "
-            f"{uncertainty['recommended_time_fast']} to {uncertainty['recommended_time_slow']}."
-        )
-    if "difficulty_percentile_q25" in uncertainty and "difficulty_percentile_q75" in uncertainty:
-        return (
-            f" Because we do not know whether the athlete's time came from an easier or harder event relative to the championships, "
-            f"its equivalent value ranges roughly from "
-            f"P{uncertainty['difficulty_percentile_q25']:.1f} to "
-            f"P{uncertainty['difficulty_percentile_q75']:.1f}, using the interquartile range of event difficulty."
-        )
+    # Difficulty-adjusted ranges remain in the payload for internal analysis.
+    # Athlete-facing answers report the direct reference-table value.
     return ""
 
 
@@ -99,13 +86,11 @@ def _total_time_explanation_es(result: dict[str, Any]) -> str:
         return (
             f"Para {_context(result)}, un tiempo total de {result['input_total_time']} "
             f"corresponde aproximadamente a {round_percentile(result['performance_percentile'])}."
-            f"{_uncertainty_note_es(result)}"
             f"{_range_note_es(result)}"
         )
     return (
         f"Para {_context(result)}, {round_percentile(result['percentile'])} "
         f"corresponde a un tiempo total aproximado de {result['total_time']}."
-        f"{_uncertainty_note_es(result)}"
         f"{_range_note_es(result)}"
     )
 
@@ -133,13 +118,11 @@ def _segment_explanation_es(result: dict[str, Any]) -> str:
         return (
             f"Para {_context(result)}, un tiempo de {segment} de {result['input_time']} "
             f"corresponde aproximadamente a {round_percentile(result['performance_percentile'])}."
-            f"{_uncertainty_note_es(result)}"
             f"{_range_note_es(result)}"
         )
     return (
         f"Para {_context(result)}, {round_percentile(result['percentile'])} "
         f"corresponde a un tiempo aproximado de {segment} de {result['time']}."
-        f"{_uncertainty_note_es(result)}"
         f"{_range_note_es(result)}"
     )
 

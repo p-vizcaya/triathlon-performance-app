@@ -17,7 +17,13 @@ from .normalization import (
     parse_segment_time_to_seconds,
     parse_time_to_seconds,
 )
-from .query_index import INDEX_PATH, get_segment_curve_from_index, get_total_curve_from_index
+from .query_index import (
+    INDEX_PATH,
+    get_segment_curve_from_index,
+    get_segment_meta_from_index,
+    get_total_curve_from_index,
+    get_total_meta_from_index,
+)
 from .sources import get_source
 from .uncertainty import uncertainty_for_percentile, uncertainty_for_time
 
@@ -209,6 +215,8 @@ def get_total_percentile_by_time(
     coverage = validate_query_inputs("total_time_curve", modality, sex_label, age_group)
     if not coverage.valid:
         return coverage.to_dict()
+    meta = get_total_meta_from_index(modality, sex_label, age_group) or {}
+    records = meta.get("records") or coverage.records
 
     percentile, interpolated, range_status = _interpolate_y(
         points := _total_curve_rows(modality, sex_label, age_group),
@@ -228,6 +236,7 @@ def get_total_percentile_by_time(
         "input_total_seconds": total_seconds,
         "input_total_time": format_seconds(total_seconds),
         "performance_percentile": percentile,
+        "records": records,
         "uncertainty": uncertainty_for_time(
             modality=modality,
             sex_label=sex_label,
@@ -235,6 +244,7 @@ def get_total_percentile_by_time(
             points=points,
             seconds=total_seconds,
             percentile=percentile,
+            record_count=records,
         ),
     }
 
@@ -252,6 +262,8 @@ def get_total_time_by_percentile(
     coverage = validate_query_inputs("total_time_curve", modality, sex_label, age_group)
     if not coverage.valid:
         return coverage.to_dict()
+    meta = get_total_meta_from_index(modality, sex_label, age_group) or {}
+    records = meta.get("records") or coverage.records
 
     seconds, interpolated, range_status = _interpolate_x(
         points := _total_curve_rows(modality, sex_label, age_group),
@@ -271,6 +283,7 @@ def get_total_time_by_percentile(
         "percentile": percentile_value,
         "total_seconds": seconds,
         "total_time": format_seconds(seconds),
+        "records": records,
         "uncertainty": uncertainty_for_percentile(
             modality=modality,
             sex_label=sex_label,
@@ -278,6 +291,7 @@ def get_total_time_by_percentile(
             points=points,
             seconds=seconds,
             percentile=percentile_value,
+            record_count=records,
         ),
     }
 
@@ -297,6 +311,8 @@ def get_segment_percentile_by_time(
     points, source, sheet, invalid = _segment_points_and_source(modality, sex_label, age_group, segment)
     if invalid is not None:
         return invalid
+    meta = get_segment_meta_from_index(modality, sex_label, age_group, segment) or {}
+    records = meta.get("records")
 
     percentile, interpolated, range_status = _interpolate_y(
         points,
@@ -317,6 +333,7 @@ def get_segment_percentile_by_time(
         "input_seconds": seconds,
         "input_time": format_seconds(seconds),
         "performance_percentile": percentile,
+        "records": records,
         "uncertainty": uncertainty_for_time(
             modality=modality,
             sex_label=sex_label,
@@ -325,6 +342,7 @@ def get_segment_percentile_by_time(
             seconds=seconds,
             percentile=percentile,
             segment=segment,
+            record_count=records,
         ),
     }
 
@@ -344,6 +362,8 @@ def get_segment_time_by_percentile(
     points, source, sheet, invalid = _segment_points_and_source(modality, sex_label, age_group, segment)
     if invalid is not None:
         return invalid
+    meta = get_segment_meta_from_index(modality, sex_label, age_group, segment) or {}
+    records = meta.get("records")
 
     seconds, interpolated, range_status = _interpolate_x(
         points,
@@ -364,6 +384,7 @@ def get_segment_time_by_percentile(
         "percentile": percentile_value,
         "seconds": seconds,
         "time": format_seconds(seconds),
+        "records": records,
         "uncertainty": uncertainty_for_percentile(
             modality=modality,
             sex_label=sex_label,
@@ -372,5 +393,6 @@ def get_segment_time_by_percentile(
             seconds=seconds,
             percentile=percentile_value,
             segment=segment,
+            record_count=records,
         ),
     }

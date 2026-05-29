@@ -56,6 +56,14 @@ def get_total_params_from_index(modality: str, sex_label: str, age_group: str) -
     return None if rows is None else list(rows)
 
 
+def get_total_meta_from_index(modality: str, sex_label: str, age_group: str) -> dict[str, Any] | None:
+    index = load_1d_query_index()
+    if index is None:
+        return None
+    row = index.get("total_meta", {}).get(_key(modality, sex_label, age_group))
+    return None if row is None else dict(row)
+
+
 def get_segment_params_from_index(
     modality: str,
     sex_label: str,
@@ -67,3 +75,16 @@ def get_segment_params_from_index(
         return None
     rows = index.get("segment_params", {}).get(_key(modality, sex_label, age_group, segment))
     return None if rows is None else list(rows)
+
+
+def get_segment_meta_from_index(
+    modality: str,
+    sex_label: str,
+    age_group: str,
+    segment: str,
+) -> dict[str, Any] | None:
+    index = load_1d_query_index()
+    if index is None:
+        return None
+    row = index.get("segment_meta", {}).get(_key(modality, sex_label, age_group, segment))
+    return None if row is None else dict(row)

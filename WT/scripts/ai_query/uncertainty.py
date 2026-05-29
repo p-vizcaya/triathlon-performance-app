@@ -225,22 +225,16 @@ def uncertainty_for_time(
     seconds: float,
     percentile: float,
     segment: str | None = None,
+    record_count: int | None = None,
 ) -> dict[str, Any]:
-    n = len(points)
+    n = int(record_count or len(points))
     p_low, p_high, p_se = _percentile_ci(percentile, n)
     by_percentile = _curve_by_percentile(points)
     stat_fast = _interpolate(by_percentile, p_high)
     stat_slow = _interpolate(by_percentile, p_low)
-    if segment is None:
-        rows = _total_param_rows(modality, sex_label, age_group)
-    else:
-        rows = _segment_param_rows(modality, sex_label, age_group, segment)
-    params = _cumulative_params(rows)
-    difficulty_percentiles = _difficulty_percentiles_from_time(seconds, params, _curve_by_seconds(points))
     return {
         "uncertainty_confidence_level": CONFIDENCE_LEVEL,
         "stat_n": n,
-        "event_param_count": len(params),
         "performance_percentile_se": p_se,
         "performance_percentile_ci_low": p_low,
         "performance_percentile_ci_high": p_high,
@@ -249,7 +243,6 @@ def uncertainty_for_time(
         "stat_time_slow_seconds": stat_slow,
         "stat_time_slow": format_seconds(stat_slow),
         "stat_time_width_seconds": stat_slow - stat_fast,
-        **_percentile_summary(difficulty_percentiles),
     }
 
 
@@ -262,8 +255,9 @@ def uncertainty_for_percentile(
     seconds: float,
     percentile: float,
     segment: str | None = None,
+    record_count: int | None = None,
 ) -> dict[str, Any]:
-    n = len(points)
+    n = int(record_count or len(points))
     p_low, p_high, p_se = _percentile_ci(percentile, n)
     by_percentile = _curve_by_percentile(points)
     stat_fast = _interpolate(by_percentile, p_high)
