@@ -132,37 +132,54 @@ def conditional_segment_percentile_from_joint(
             "message": "This version supports one or two cumulative conditions.",
         }
 
-    target_percentile = _marginal_percentile(modality, sex_label, age_group, target_segment, target_time)
-    parsed_conditions = [
-        _condition_event(modality, sex_label, age_group, segment, spec)
-        for segment, spec in zip(condition_segments, condition_specs)
-    ]
+    try:
+        target_percentile = _marginal_percentile(modality, sex_label, age_group, target_segment, target_time)
+        parsed_conditions = [
+            _condition_event(modality, sex_label, age_group, segment, spec)
+            for segment, spec in zip(condition_segments, condition_specs)
+        ]
+    except ValueError as exc:
+        return {
+            "valid": False,
+            "entity": "conditional_segment_percentile",
+            "reason": "outside_empirical_range",
+            "message": str(exc),
+        }
     invalid_condition = next((condition for condition in parsed_conditions if not condition.get("valid", True)), None)
     if invalid_condition:
         return invalid_condition
 
-    if len(condition_segments) == 1:
-        numerator_probability, denominator_probability = _single_condition_probabilities(
-            modality,
-            sex_label,
-            age_group,
-            target_segment,
-            target_percentile,
-            condition_segments[0],
-            parsed_conditions[0],
-        )
-    else:
-        numerator_probability, denominator_probability = _two_condition_probabilities(
-            modality,
-            sex_label,
-            age_group,
-            target_segment,
-            target_percentile,
-            condition_segments[0],
-            condition_segments[1],
-            parsed_conditions[0],
-            parsed_conditions[1],
-        )
+    try:
+        if len(condition_segments) == 1:
+            numerator_probability, denominator_probability = _single_condition_probabilities(
+                modality,
+                sex_label,
+                age_group,
+                target_segment,
+                target_percentile,
+                condition_segments[0],
+                parsed_conditions[0],
+            )
+        else:
+            numerator_probability, denominator_probability = _two_condition_probabilities(
+                modality,
+                sex_label,
+                age_group,
+                target_segment,
+                target_percentile,
+                condition_segments[0],
+                condition_segments[1],
+                parsed_conditions[0],
+                parsed_conditions[1],
+            )
+    except ValueError as exc:
+        return {
+            "valid": False,
+            "entity": "conditional_segment_percentile",
+            "reason": "outside_empirical_range",
+            "message": str(exc),
+            "conditions": parsed_conditions,
+        }
 
     if denominator_probability <= 0:
         return {

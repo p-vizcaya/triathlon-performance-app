@@ -40,6 +40,7 @@ def _uncertainty_note(result: dict[str, Any]) -> str:
 
 
 def _uncertainty_note_es(result: dict[str, Any]) -> str:
+    return ""
     uncertainty = result.get("uncertainty")
     if not isinstance(uncertainty, dict):
         return ""

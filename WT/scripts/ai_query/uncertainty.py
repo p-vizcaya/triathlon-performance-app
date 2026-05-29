@@ -91,7 +91,15 @@ def _interpolate(points: list[tuple[float, float]], x: float) -> float:
     ordered = sorted(points, key=lambda point: point[0])
     xs = np.asarray([point[0] for point in ordered], dtype=float)
     ys = np.asarray([point[1] for point in ordered], dtype=float)
+    if len(xs) == 0 or float(x) < xs[0] or float(x) > xs[-1]:
+        return float("nan")
     return float(np.interp(float(x), xs, ys))
+
+
+def _format_seconds_or_none(seconds: float) -> str | None:
+    if not np.isfinite(seconds):
+        return None
+    return format_seconds(seconds)
 
 
 def _curve_by_seconds(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -239,10 +247,10 @@ def uncertainty_for_time(
         "performance_percentile_ci_low": p_low,
         "performance_percentile_ci_high": p_high,
         "stat_time_fast_seconds": stat_fast,
-        "stat_time_fast": format_seconds(stat_fast),
+        "stat_time_fast": _format_seconds_or_none(stat_fast),
         "stat_time_slow_seconds": stat_slow,
-        "stat_time_slow": format_seconds(stat_slow),
-        "stat_time_width_seconds": stat_slow - stat_fast,
+        "stat_time_slow": _format_seconds_or_none(stat_slow),
+        "stat_time_width_seconds": stat_slow - stat_fast if np.isfinite(stat_fast) and np.isfinite(stat_slow) else None,
     }
 
 
@@ -262,31 +270,15 @@ def uncertainty_for_percentile(
     by_percentile = _curve_by_percentile(points)
     stat_fast = _interpolate(by_percentile, p_high)
     stat_slow = _interpolate(by_percentile, p_low)
-    if segment is None:
-        rows = _total_param_rows(modality, sex_label, age_group)
-    else:
-        rows = _segment_param_rows(modality, sex_label, age_group, segment)
-    params = _cumulative_params(rows)
-    difficulty_times = _difficulty_times_from_percentile(seconds, params)
-    difficulty = _time_summary(difficulty_times)
-    rec_fast = min(stat_fast, difficulty.get("difficulty_time_q25_seconds", stat_fast))
-    rec_slow = max(stat_slow, difficulty.get("difficulty_time_q75_seconds", stat_slow))
     return {
         "uncertainty_confidence_level": CONFIDENCE_LEVEL,
         "stat_n": n,
-        "event_param_count": len(params),
         "performance_percentile_se": p_se,
         "performance_percentile_ci_low": p_low,
         "performance_percentile_ci_high": p_high,
         "stat_time_fast_seconds": stat_fast,
-        "stat_time_fast": format_seconds(stat_fast),
+        "stat_time_fast": _format_seconds_or_none(stat_fast),
         "stat_time_slow_seconds": stat_slow,
-        "stat_time_slow": format_seconds(stat_slow),
-        "stat_time_width_seconds": stat_slow - stat_fast,
-        **difficulty,
-        "recommended_time_fast_seconds": rec_fast,
-        "recommended_time_fast": format_seconds(rec_fast),
-        "recommended_time_slow_seconds": rec_slow,
-        "recommended_time_slow": format_seconds(rec_slow),
-        "recommended_time_width_seconds": rec_slow - rec_fast,
+        "stat_time_slow": _format_seconds_or_none(stat_slow),
+        "stat_time_width_seconds": stat_slow - stat_fast if np.isfinite(stat_fast) and np.isfinite(stat_slow) else None,
     }

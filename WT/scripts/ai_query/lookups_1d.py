@@ -150,9 +150,9 @@ def _interpolate_y(points: list[tuple[float, float]], x: float) -> tuple[float, 
     if len(points) == 1:
         return points[0][1], False, "single_point"
 
-    if x <= points[0][0]:
+    if x < points[0][0]:
         return points[0][1], False, "below_range"
-    if x >= points[-1][0]:
+    if x > points[-1][0]:
         return points[-1][1], False, "above_range"
 
     for left, right in zip(points, points[1:]):
@@ -195,6 +195,109 @@ def _base_result(
     }
 
 
+def _implausible_time_result(
+    *,
+    entity: str,
+    modality: str,
+    sex_label: str,
+    age_group: str,
+    source: str | dict[str, str] | None,
+    sheet: str | None,
+    seconds: float,
+    label: str,
+    points: list[tuple[float, float]],
+    segment: str | None = None,
+) -> dict[str, Any] | None:
+    if not points:
+        return None
+    fastest = float(points[0][0])
+    slowest = float(points[-1][0])
+    too_fast = seconds < fastest * 0.5
+    too_slow = seconds > slowest * 2.0
+    if not (too_fast or too_slow):
+        return None
+    scope = "total time" if segment is None else f"{segment} time"
+    bound = fastest if too_fast else slowest
+    direction = "faster" if too_fast else "slower"
+    return {
+        **_base_result(
+            entity=entity,
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            source=source,
+            sheet=sheet,
+            interpolated=False,
+            range_status="implausibly_fast" if too_fast else "implausibly_slow",
+        ),
+        "valid": False,
+        "reason": "implausible_time_input",
+        "segment": segment,
+        "input_seconds": seconds,
+        "input_time": format_seconds(seconds),
+        "message": (
+            f"The {scope} {label} is implausibly {direction} for {modality} {sex_label} {age_group}. "
+            f"The closest reference-table boundary is {format_seconds(bound)}. "
+            f"Please check the time format or unit."
+        ),
+    }
+
+
+def _out_of_empirical_range_result(
+    *,
+    entity: str,
+    modality: str,
+    sex_label: str,
+    age_group: str,
+    source: str | dict[str, str] | None,
+    sheet: str | None,
+    range_status: str,
+    points: list[tuple[float, float]],
+    input_seconds: float | None = None,
+    input_time: str | None = None,
+    percentile: float | None = None,
+    segment: str | None = None,
+) -> dict[str, Any]:
+    fastest_seconds = float(points[0][0])
+    slowest_seconds = float(points[-1][0])
+    p_values = [float(point[1]) for point in points]
+    p_min = min(p_values)
+    p_max = max(p_values)
+    scope = "total time" if segment is None else f"{segment} time"
+    value = input_time if input_time is not None else f"P{percentile:g}"
+    message = (
+        f"The requested {scope} value ({value}) is outside the empirical range for "
+        f"{modality} {sex_label} {age_group}. The table covers {format_seconds(fastest_seconds)} "
+        f"to {format_seconds(slowest_seconds)} and approximately P{p_min:.1f} to P{p_max:.1f}. "
+        "No percentile or time is calculated outside that range."
+    )
+    return {
+        **_base_result(
+            entity=entity,
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            source=source,
+            sheet=sheet,
+            interpolated=False,
+            range_status=range_status,
+        ),
+        "valid": False,
+        "reason": "outside_empirical_range",
+        "segment": segment,
+        "input_seconds": input_seconds,
+        "input_time": input_time,
+        "percentile": percentile,
+        "empirical_min_seconds": fastest_seconds,
+        "empirical_min_time": format_seconds(fastest_seconds),
+        "empirical_max_seconds": slowest_seconds,
+        "empirical_max_time": format_seconds(slowest_seconds),
+        "empirical_min_percentile": p_min,
+        "empirical_max_percentile": p_max,
+        "message": message,
+    }
+
+
 def _normalize_percentile(percentile: Any) -> float:
     value = float(percentile)
     if not 0 <= value <= 100:
@@ -217,11 +320,25 @@ def get_total_percentile_by_time(
         return coverage.to_dict()
     meta = get_total_meta_from_index(modality, sex_label, age_group) or {}
     records = meta.get("records") or coverage.records
+    points = _total_curve_rows(modality, sex_label, age_group)
 
     percentile, interpolated, range_status = _interpolate_y(
-        points := _total_curve_rows(modality, sex_label, age_group),
+        points,
         total_seconds,
     )
+    if range_status is not None:
+        return _out_of_empirical_range_result(
+            entity="total_time_curve",
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            source=coverage.source,
+            sheet=coverage.sheet,
+            range_status=range_status,
+            points=points,
+            input_seconds=total_seconds,
+            input_time=format_seconds(total_seconds),
+        )
     return {
         **_base_result(
             entity="total_time_curve",
@@ -269,6 +386,18 @@ def get_total_time_by_percentile(
         points := _total_curve_rows(modality, sex_label, age_group),
         percentile_value,
     )
+    if range_status is not None:
+        return _out_of_empirical_range_result(
+            entity="total_time_curve",
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            source=coverage.source,
+            sheet=coverage.sheet,
+            range_status=range_status,
+            points=points,
+            percentile=percentile_value,
+        )
     return {
         **_base_result(
             entity="total_time_curve",
@@ -318,6 +447,20 @@ def get_segment_percentile_by_time(
         points,
         seconds,
     )
+    if range_status is not None:
+        return _out_of_empirical_range_result(
+            entity="segment_curve",
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            source=source,
+            sheet=sheet,
+            range_status=range_status,
+            points=points,
+            input_seconds=seconds,
+            input_time=format_seconds(seconds),
+            segment=segment,
+        )
     return {
         **_base_result(
             entity="segment_curve",
@@ -369,6 +512,19 @@ def get_segment_time_by_percentile(
         points,
         percentile_value,
     )
+    if range_status is not None:
+        return _out_of_empirical_range_result(
+            entity="segment_curve",
+            modality=modality,
+            sex_label=sex_label,
+            age_group=age_group,
+            source=source,
+            sheet=sheet,
+            range_status=range_status,
+            points=points,
+            percentile=percentile_value,
+            segment=segment,
+        )
     return {
         **_base_result(
             entity="segment_curve",

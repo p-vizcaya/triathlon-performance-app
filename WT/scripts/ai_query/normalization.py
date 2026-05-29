@@ -263,6 +263,7 @@ def parse_segment_time_to_seconds(modality: Any, segment: Any, value: Any) -> fl
     """Parse a segment time or sport-specific performance unit into segment seconds."""
     modality = normalize_modality(modality)
     segment = normalize_segment(segment)
+    text = _clean(value)
 
     if segment == "Swim":
         pace = _extract_swim_pace_per_100m(value)
@@ -277,7 +278,12 @@ def parse_segment_time_to_seconds(modality: Any, segment: Any, value: Any) -> fl
         if pace is not None:
             return pace * SEGMENT_DISTANCES[modality]["Run"]["kilometers"]
 
-    return parse_time_to_seconds(value)
+    seconds = parse_time_to_seconds(value)
+    if segment in {"Swim", "Bike", "Run"} and seconds < 5 * 60:
+        ambiguous_minutes = re.fullmatch(r"0+\s*:\s*(\d{1,2})", text)
+        if ambiguous_minutes:
+            return float(ambiguous_minutes.group(1)) * 60
+    return seconds
 
 
 def format_seconds(seconds: Any) -> str:

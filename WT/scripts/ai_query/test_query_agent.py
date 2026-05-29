@@ -40,6 +40,21 @@ class QueryAgentTests(unittest.TestCase):
         self.assertNotIn("P4.5", explanation)
         self.assertNotIn("difficulty_percentile_q25", result["uncertainty"])
 
+    def test_absurd_segment_time_is_rejected(self) -> None:
+        response = run_query_agent(
+            {
+                "intent": "segment_percentile_by_time",
+                "modality": "Standard",
+                "sex_category": "O",
+                "age_group": "70-74",
+                "segment": "Swim",
+                "segment_time": "40",
+            }
+        )
+        self.assertFalse(response["valid"])
+        self.assertEqual(response["reason"], "outside_empirical_range")
+        self.assertIn("outside the empirical range", response["message"])
+
     def test_agent_asks_for_missing_fields(self) -> None:
         response = run_query_agent(
             {

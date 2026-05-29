@@ -84,9 +84,9 @@ def _cell_map(rows: list[dict[str, Any]]) -> dict[tuple[float, float], float]:
 
 def _bracket(values: list[float], target: float) -> tuple[float, float, str | None]:
     ordered = sorted(set(values))
-    if target <= ordered[0]:
+    if target < ordered[0]:
         return ordered[0], ordered[0], "below_range"
-    if target >= ordered[-1]:
+    if target > ordered[-1]:
         return ordered[-1], ordered[-1], "above_range"
     for lower, upper in zip(ordered, ordered[1:]):
         if lower <= target <= upper:
@@ -103,6 +103,8 @@ def _bilinear_interpolate(rows: list[dict[str, Any]], x: float, y: float) -> tup
     ys = [float(row["y_performance_percentile"]) for row in rows]
     x0, x1, x_status = _bracket(xs, x)
     y0, y1, y_status = _bracket(ys, y)
+    if x_status or y_status:
+        return float("nan"), False, x_status or y_status
     values = _cell_map(rows)
 
     q00 = values[(x0, y0)]
@@ -148,6 +150,24 @@ def get_pair_percentile_by_segment_percentiles(
     rows = _pair_rows(modality, sex_label, age_group, pair)
     x_segment, y_segment = _axis_segments(rows)
     joint_percentile, interpolated, range_status = _bilinear_interpolate(rows, x_percentile, y_percentile)
+    if range_status is not None:
+        return {
+            "valid": False,
+            "entity": "segment_pair_plane",
+            "modality": modality,
+            "sex_label": sex_label,
+            "age_group": age_group,
+            "pair": pair,
+            "x_segment": x_segment,
+            "y_segment": y_segment,
+            "x_performance_percentile": x_percentile,
+            "y_performance_percentile": y_percentile,
+            "range_status": range_status,
+            "reason": "outside_empirical_range",
+            "message": "At least one requested marginal percentile is outside the pair table's empirical grid.",
+            "source": coverage.source,
+            "sheet": coverage.sheet,
+        }
     x_seconds, y_seconds = _nearest_axis_times(rows, x_percentile, y_percentile)
 
     return {
@@ -215,9 +235,9 @@ def get_pair_percentile_by_segment_times(
     x_marginal = get_segment_percentile_by_time(modality, sex_label, age_group, x_segment, x_seconds)
     y_marginal = get_segment_percentile_by_time(modality, sex_label, age_group, y_segment, y_seconds)
 
-    if not x_marginal.get("entity") == "segment_curve":
+    if not x_marginal.get("valid", True):
         return x_marginal
-    if not y_marginal.get("entity") == "segment_curve":
+    if not y_marginal.get("valid", True):
         return y_marginal
 
     joint = get_pair_percentile_by_segment_percentiles(

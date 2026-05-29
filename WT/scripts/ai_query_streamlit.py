@@ -599,7 +599,7 @@ def _time_or_sport_unit(label: str, segment: str, modality: str, *, key: str) ->
 
     mode = st.selectbox(f"{label} input", options, key=f"{key}_mode")
     if mode == "Time":
-        return st.text_input(label, placeholder="mm:ss or h:mm:ss", key=f"{key}_time")
+        return st.text_input(label, placeholder="40:00 or 1:10:00", key=f"{key}_time")
     if mode == "Pace /100m":
         value = st.text_input(label, placeholder="1:40/100m", key=f"{key}_pace100")
         return f"{value}/100m" if value and "/100m" not in value else value

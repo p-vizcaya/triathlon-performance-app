@@ -106,7 +106,7 @@ def compare_time_to_event_curves(
     min_n: int = MIN_USABLE_N,
 ) -> dict[str, Any]:
     modality, sex_label, age_group, segment = _context(modality, sex_category, age_group, segment)
-    seconds = parse_time_to_seconds(time_value) if segment == "Total" else parse_segment_time_to_seconds(time_value, segment, modality)
+    seconds = parse_time_to_seconds(time_value) if segment == "Total" else parse_segment_time_to_seconds(modality, segment, time_value)
     rows = _matching_event_rows(modality, sex_label, age_group, segment, event_years, min_n=min_n)
     comparisons = [_time_result(row, seconds) for row in rows]
     return _comparison_result(
@@ -175,14 +175,32 @@ def _matching_event_rows(
 def _time_result(row: dict[str, Any], seconds: float) -> dict[str, Any]:
     curve = row["curve"]
     n = len(curve)
+    if seconds < curve[0] or seconds > curve[-1]:
+        range_status = "below_empirical_range" if seconds < curve[0] else "above_empirical_range"
+        return {
+            "valid": False,
+            "year": row["year"],
+            "event_name": row["event_name"],
+            "n": n,
+            "input_time": format_seconds(seconds),
+            "input_seconds": seconds,
+            "empirical_min_time": format_seconds(curve[0]),
+            "empirical_min_seconds": curve[0],
+            "empirical_max_time": format_seconds(curve[-1]),
+            "empirical_max_seconds": curve[-1],
+            "range_status": range_status,
+            "reason": "outside_empirical_range",
+            "message": "The requested time is outside this championship's empirical range.",
+            "confidence": _confidence_label(n),
+        }
     faster_count = bisect.bisect_left(curve, seconds)
     tie_left = bisect.bisect_left(curve, int(round(seconds)))
     tie_right = bisect.bisect_right(curve, int(round(seconds)))
     tie_count = max(0, tie_right - tie_left)
     slower_count = max(0, n - bisect.bisect_right(curve, seconds))
     insertion = bisect.bisect_left(curve, seconds)
-    percentile = max(0.0, min(100.0, 100.0 * (1.0 - (insertion + 0.5) / n)))
-    range_status = "faster_than_field" if insertion == 0 and seconds < curve[0] else "slower_than_field" if insertion == n else None
+    percentile = 100.0 * (1.0 - (insertion + 0.5) / n)
+    range_status = None
     return {
         "year": row["year"],
         "event_name": row["event_name"],
@@ -196,6 +214,7 @@ def _time_result(row: dict[str, Any], seconds: float) -> dict[str, Any]:
         "performance_percentile": percentile,
         "range_status": range_status,
         "confidence": _confidence_label(n),
+        "valid": True,
     }
 
 
@@ -204,9 +223,24 @@ def _percentile_result(row: dict[str, Any], percentile: float) -> dict[str, Any]
     n = len(curve)
     p_min = 100.0 * (0.5 / n)
     p_max = 100.0 * (1.0 - 0.5 / n)
+    if percentile < p_min or percentile > p_max:
+        range_status = "below_empirical_support" if percentile < p_min else "above_empirical_support"
+        return {
+            "valid": False,
+            "year": row["year"],
+            "event_name": row["event_name"],
+            "n": n,
+            "percentile": percentile,
+            "p_min": p_min,
+            "p_max": p_max,
+            "range_status": range_status,
+            "reason": "outside_empirical_range",
+            "message": "The requested percentile is outside this championship's empirical support.",
+            "confidence": _confidence_label(n),
+        }
     raw_position = (1.0 - percentile / 100.0) * n - 0.5
-    range_status = "above_empirical_support" if percentile > p_max else "below_empirical_support" if percentile < p_min else None
-    position = max(0.0, min(float(n - 1), raw_position))
+    range_status = None
+    position = raw_position
     lower = int(math.floor(position))
     upper = int(math.ceil(position))
     if lower == upper:
@@ -226,6 +260,7 @@ def _percentile_result(row: dict[str, Any], percentile: float) -> dict[str, Any]
         "p_max": p_max,
         "range_status": range_status,
         "confidence": _confidence_label(n),
+        "valid": True,
     }
 
 

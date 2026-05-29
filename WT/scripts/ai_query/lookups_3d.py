@@ -82,9 +82,9 @@ def _nearest_axis_time(axis_rows: list[dict[str, Any]], axis: str, percentile: f
 
 def _bracket(values: list[float], target: float) -> tuple[float, float, str | None]:
     ordered = sorted(set(values))
-    if target <= ordered[0]:
+    if target < ordered[0]:
         return ordered[0], ordered[0], "below_range"
-    if target >= ordered[-1]:
+    if target > ordered[-1]:
         return ordered[-1], ordered[-1], "above_range"
     for lower, upper in zip(ordered, ordered[1:]):
         if lower <= target <= upper:
@@ -120,6 +120,8 @@ def _trilinear_interpolate(
     s0, s1, s_status = _bracket(swims, swim_percentile)
     b0, b1, b_status = _bracket(bikes, bike_percentile)
     r0, r1, r_status = _bracket(runs, run_percentile)
+    if s_status or b_status or r_status:
+        return float("nan"), False, s_status or b_status or r_status
     values = _value_map(rows)
 
     ts = 0 if s1 == s0 else (swim_percentile - s0) / (s1 - s0)
@@ -180,6 +182,23 @@ def get_sbr_percentile_by_segment_percentiles(
         bike_percentile,
         run_percentile,
     )
+    if range_status is not None:
+        return {
+            "valid": False,
+            "entity": "sbr_cube",
+            "modality": modality,
+            "sex_label": sex_label,
+            "age_group": age_group,
+            "swim_performance_percentile": swim_percentile,
+            "bike_performance_percentile": bike_percentile,
+            "run_performance_percentile": run_percentile,
+            "range_status": range_status,
+            "reason": "outside_empirical_range",
+            "message": "At least one requested marginal percentile is outside the SBR cube's empirical grid.",
+            "source": coverage.source,
+            "sheet": coverage.sheet,
+            "cube_resolution": coverage.details.get("cube_resolution"),
+        }
     swim_seconds = _nearest_axis_time(axis_rows, "swim", swim_percentile)
     bike_seconds = _nearest_axis_time(axis_rows, "bike", bike_percentile)
     run_seconds = _nearest_axis_time(axis_rows, "run", run_percentile)
@@ -250,7 +269,7 @@ def get_sbr_percentile_by_segment_times(
     run_marginal = get_segment_percentile_by_time(modality, sex_label, age_group, "Run", run_seconds)
 
     for marginal in (swim_marginal, bike_marginal, run_marginal):
-        if not marginal.get("entity") == "segment_curve":
+        if not marginal.get("valid", True):
             return marginal
 
     joint = get_sbr_percentile_by_segment_percentiles(
