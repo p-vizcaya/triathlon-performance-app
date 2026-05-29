@@ -399,6 +399,12 @@ def _main_segment_results(result: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: order.get(str(item.get("segment")), 99))
 
 
+def _full_split_results(result: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = result.get("segments") or []
+    order = {"Swim": 0, "T1": 1, "Bike": 2, "T2": 3, "Run": 4}
+    return sorted(rows, key=lambda item: order.get(str(item.get("segment")), 99))
+
+
 def _profile_context(result: dict[str, Any], segments: list[dict[str, Any]]) -> str:
     if result.get("modality") and result.get("sex_label") and result.get("age_group"):
         return _context(result)
@@ -411,7 +417,9 @@ def _segment_name(segment: Any, locale: str = "en") -> str:
     if locale == "es":
         return {
             "Swim": "Nataci\u00f3n",
+            "T1": "T1",
             "Bike": "Ciclismo",
+            "T2": "T2",
             "Run": "Carrera",
             "Total": "Total",
         }.get(str(segment), str(segment))
@@ -454,6 +462,36 @@ def _main_segment_profile_explanation_es(result: dict[str, Any]) -> str:
     return " ".join(notes)
 
 
+def _full_split_profile_explanation(result: dict[str, Any]) -> str:
+    segments = _full_split_results(result)
+    if not segments:
+        return "The full split evaluation was completed."
+    segment_text = "; ".join(
+        f"{item['segment']} {item.get('input_time')} = {round_percentile(item['performance_percentile'])}"
+        for item in segments
+    )
+    total = result.get("total_result") or {}
+    notes = [f"For {_context(result)}, the split percentiles are: {segment_text}."]
+    if "performance_percentile" in total:
+        notes.append(f"Total {result.get('total_time')} = {round_percentile(total['performance_percentile'])}.")
+    return " ".join(notes)
+
+
+def _full_split_profile_explanation_es(result: dict[str, Any]) -> str:
+    segments = _full_split_results(result)
+    if not segments:
+        return "La evaluaci\u00f3n completa de segmentos se complet\u00f3."
+    segment_text = "; ".join(
+        f"{_segment_name(item['segment'], 'es')} {item.get('input_time')} = {round_percentile(item['performance_percentile'])}"
+        for item in segments
+    )
+    total = result.get("total_result") or {}
+    notes = [f"Para {_context(result)}, los percentiles por segmento son: {segment_text}."]
+    if "performance_percentile" in total:
+        notes.append(f"Total {result.get('total_time')} = {round_percentile(total['performance_percentile'])}.")
+    return " ".join(notes)
+
+
 def explain_result(result: dict[str, Any], locale: str = "en") -> str:
     if not result.get("valid", True):
         if result.get("entity") == "event_curve_comparison":
@@ -486,6 +524,8 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
             return _event_curve_explanation_es(result)
         if entity == "main_segment_profile":
             return _main_segment_profile_explanation_es(result)
+        if entity == "full_split_profile":
+            return _full_split_profile_explanation_es(result)
         return "La consulta se completo, pero no hay una plantilla de explicacion para este tipo de resultado."
     if locale != "en":
         raise ValueError("Only English and Spanish explanations are currently supported")
@@ -514,6 +554,8 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
         return _event_curve_explanation(result)
     if entity == "main_segment_profile":
         return _main_segment_profile_explanation(result)
+    if entity == "full_split_profile":
+        return _full_split_profile_explanation(result)
     if entity == "segment_pair_plane":
         return _pair_explanation(result)
     if entity == "sbr_cube":

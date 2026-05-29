@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .explain import explain_result, round_percentile
-from .normalization import format_seconds, normalize_segment, parse_time_to_seconds
+from .normalization import format_seconds, normalize_segment, parse_segment_time_to_seconds, parse_time_to_seconds
 from .router import route_query, route_query_plan
 
 
@@ -147,6 +147,82 @@ def evaluate_main_segment_profile(
     }
 
 
+def evaluate_full_split_profile(
+    modality: Any,
+    sex_category: Any,
+    age_group: Any,
+    swim_time: Any,
+    t1_time: Any,
+    bike_time: Any,
+    t2_time: Any,
+    run_time: Any,
+    total_time: Any | None = None,
+    *,
+    explain: bool = True,
+) -> dict[str, Any]:
+    split_inputs = (
+        ("Swim", swim_time),
+        ("T1", t1_time),
+        ("Bike", bike_time),
+        ("T2", t2_time),
+        ("Run", run_time),
+    )
+    total_seconds = (
+        parse_time_to_seconds(total_time)
+        if total_time not in (None, "")
+        else sum(parse_segment_time_to_seconds(modality, segment, value) for segment, value in split_inputs)
+    )
+    total_time_text = format_seconds(total_seconds)
+
+    plan = [
+        {
+            "intent": "segment_percentile_by_time",
+            "modality": modality,
+            "sex_category": sex_category,
+            "age_group": age_group,
+            "segment": segment,
+            "segment_time": value,
+        }
+        for segment, value in split_inputs
+    ]
+    plan.append(
+        {
+            "intent": "total_percentile_by_time",
+            "modality": modality,
+            "sex_category": sex_category,
+            "age_group": age_group,
+            "total_time": total_time_text,
+        }
+    )
+    plan_result = route_query_plan(plan, explain=explain)
+    if not plan_result.get("valid", False):
+        return plan_result
+
+    split_results = [
+        step["result"]
+        for step in plan_result["results"]
+        if step["result"].get("entity") == "segment_curve"
+        and "performance_percentile" in step["result"]
+    ]
+    total_result = next(
+        (step["result"] for step in plan_result["results"] if step["result"].get("entity") == "total_time_curve"),
+        None,
+    )
+    return {
+        "valid": True,
+        "entity": "full_split_profile",
+        "modality": split_results[0]["modality"] if split_results else modality,
+        "sex_label": split_results[0]["sex_label"] if split_results else sex_category,
+        "age_group": split_results[0]["age_group"] if split_results else age_group,
+        "results": plan_result["results"],
+        "segments": split_results,
+        "total_result": total_result,
+        "total_time": total_time_text,
+        "total_seconds": total_seconds,
+        "total_source": "provided" if total_time not in (None, "") else "sum_of_splits",
+    }
+
+
 def find_weakest_main_segment(
     modality: Any,
     sex_category: Any,
@@ -251,4 +327,3 @@ def explain_profile_result(profile: dict[str, Any]) -> str:
         return str(profile["summary"])
     explanations = [explain_result(step["result"]) for step in profile.get("results", [])]
     return " ".join(explanations)
-

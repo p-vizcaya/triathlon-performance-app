@@ -92,7 +92,9 @@ class QueryAgentTests(unittest.TestCase):
                 "sex_category": "O",
                 "age_group": "70-74",
                 "swim_time": "40:00",
+                "t1_time": "6:00",
                 "bike_time": "1:15:00",
+                "t2_time": "4:00",
                 "run_time": "54:00",
             }
         )
@@ -100,9 +102,11 @@ class QueryAgentTests(unittest.TestCase):
         explanation = explain_result(response["result"], locale="es")
         self.assertIn("los percentiles por segmento", explanation)
         self.assertIn("Natación 40:00", explanation)
+        self.assertIn("T1 6:00", explanation)
         self.assertIn("Ciclismo 1:15:00", explanation)
+        self.assertIn("T2 4:00", explanation)
         self.assertIn("Carrera 54:00", explanation)
-        self.assertIn("total estimado", explanation)
+        self.assertIn("Total", explanation)
         self.assertNotIn("perfil conjunto", explanation)
 
     def test_agent_runs_scenario_comparison(self) -> None:

@@ -44,7 +44,7 @@ QUERY_EXAMPLES = {
     "Segment time to percentile": "Example: Standard O 40-44, Run 45:00, or Run pace 4:30/km.",
     "Percentile to segment time": "Example: Sprint F 45-49, Bike P75.",
     "Estimated total from Swim/Bike/Run": "Example: Swim 32:00, Bike 1:15:00, Run 45:00. Average T1/T2 are added.",
-    "Full split evaluation": "Example: Swim 14:00, Bike 36:00, Run 24:30. Reports each segment percentile and estimated total.",
+    "Full split evaluation": "Example: Swim 14:00, T1 1:20, Bike 36:00, T2 1:10, Run 24:30. Reports each split and total percentile.",
     "Gap to target percentile": "Example: current total 2:45:00, target P75.",
     "Required missing segment for target percentile": "Example: given Swim and Bike, find the Run needed for total P75.",
     "Compare segments": "Example: Swim 32:00, Bike 1:15:00, Run 45:00, with optional T1/T2/Total.",
@@ -187,7 +187,7 @@ QUERY_EXAMPLES_ES = {
     "Segment time to percentile": "Ejemplo: Standard O 40-44, Carrera 45:00, o ritmo de Carrera 4:30/km.",
     "Percentile to segment time": "Ejemplo: Sprint F 45-49, Ciclismo P75.",
     "Estimated total from Swim/Bike/Run": "Ejemplo: Nataci\u00f3n 32:00, Ciclismo 1:15:00, Carrera 45:00. Se suman T1/T2 promedio.",
-    "Full split evaluation": "Ejemplo: Nataci\u00f3n 14:00, Ciclismo 36:00, Carrera 24:30. Reporta cada percentil y el total estimado.",
+    "Full split evaluation": "Ejemplo: Nataci\u00f3n 14:00, T1 1:20, Ciclismo 36:00, T2 1:10, Carrera 24:30. Reporta cada percentil y el total.",
     "Gap to target percentile": "Ejemplo: tiempo total actual 2:45:00, objetivo P75.",
     "Required missing segment for target percentile": "Ejemplo: con Nataci\u00f3n y Ciclismo conocidos, encontrar la Carrera necesaria para P75 total.",
     "Compare segments": "Ejemplo: Nataci\u00f3n 32:00, Ciclismo 1:15:00, Carrera 45:00, con T1/T2/Total opcionales.",
@@ -752,15 +752,27 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         percentile = _percentile_input("Percentile", key="segment_percentile", locale=locale)
         return {**base, "intent": "segment_time_by_percentile", "segment": segment, "percentile": percentile}
 
-    if query_type in ("Estimated total from Swim/Bike/Run", "Full split evaluation"):
+    if query_type == "Estimated total from Swim/Bike/Run":
         swim_time = _time_or_sport_unit(_segment_label(locale, "Swim"), "Swim", modality, key="sbr_swim", locale=locale)
         bike_time = _time_or_sport_unit(_segment_label(locale, "Bike"), "Bike", modality, key="sbr_bike", locale=locale)
         run_time = _time_or_sport_unit(_segment_label(locale, "Run"), "Run", modality, key="sbr_run", locale=locale)
-        intent = {
-            "Estimated total from Swim/Bike/Run": "estimated_total_percentile_from_segments",
-            "Full split evaluation": "full_split_evaluation",
-        }[query_type]
-        return {**base, "intent": intent, "swim_time": swim_time, "bike_time": bike_time, "run_time": run_time}
+        return {**base, "intent": "estimated_total_percentile_from_segments", "swim_time": swim_time, "bike_time": bike_time, "run_time": run_time}
+
+    if query_type == "Full split evaluation":
+        swim_time = _time_or_sport_unit(_segment_label(locale, "Swim"), "Swim", modality, key="full_swim", locale=locale)
+        t1_time = st.text_input("T1", placeholder="1:20", key="full_t1")
+        bike_time = _time_or_sport_unit(_segment_label(locale, "Bike"), "Bike", modality, key="full_bike", locale=locale)
+        t2_time = st.text_input("T2", placeholder="1:10", key="full_t2")
+        run_time = _time_or_sport_unit(_segment_label(locale, "Run"), "Run", modality, key="full_run", locale=locale)
+        return {
+            **base,
+            "intent": "full_split_evaluation",
+            "swim_time": swim_time,
+            "t1_time": t1_time,
+            "bike_time": bike_time,
+            "t2_time": t2_time,
+            "run_time": run_time,
+        }
 
     if query_type == "Gap to target percentile":
         scope = st.selectbox(_field_label(locale, "Scope"), ("Total", "Swim", "Bike", "Run", "T1", "T2"), format_func=lambda value: _segment_label(locale, value))

@@ -185,9 +185,9 @@ AVAILABLE_TOOLS: tuple[dict[str, Any], ...] = (
     },
     {
         "name": "full_split_evaluation",
-        "description": "Alias for evaluate_main_segment_profile. Evaluate swim, bike, and run marginal percentiles, SBR joint percentile, estimated total percentile, and weakest/strongest main segment.",
-        "required": (*COMMON_REQUIRED, "swim_time", "bike_time", "run_time"),
-        "clarify_if_missing": (*COMMON_REQUIRED, "swim_time", "bike_time", "run_time"),
+        "description": "Evaluate each split separately: swim, T1, bike, T2, run, and total percentile. If total_time is omitted, total is computed as the sum of the five splits.",
+        "required": (*COMMON_REQUIRED, "swim_time", "t1_time", "bike_time", "t2_time", "run_time"),
+        "clarify_if_missing": (*COMMON_REQUIRED, "swim_time", "t1_time", "bike_time", "t2_time", "run_time"),
         "do_not_infer": ("sex_category", "age_group"),
     },
     {

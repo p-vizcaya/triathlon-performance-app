@@ -5,6 +5,7 @@ from typing import Any
 from .explain import explain_result
 from .orchestrator import (
     compare_segment_scenarios,
+    evaluate_full_split_profile,
     evaluate_main_segment_profile,
     explain_profile_result,
     find_weakest_main_segment,
@@ -46,7 +47,7 @@ def _clarification_response(payload: dict[str, Any], missing: list[str]) -> dict
 
 def _orchestrated_call(payload: dict[str, Any]) -> dict[str, Any]:
     intent = payload["intent"]
-    if intent in ("evaluate_main_segment_profile", "full_split_evaluation"):
+    if intent == "evaluate_main_segment_profile":
         return evaluate_main_segment_profile(
             payload["modality"],
             payload["sex_category"],
@@ -54,6 +55,18 @@ def _orchestrated_call(payload: dict[str, Any]) -> dict[str, Any]:
             payload["swim_time"],
             payload["bike_time"],
             payload["run_time"],
+        )
+    if intent == "full_split_evaluation":
+        return evaluate_full_split_profile(
+            payload["modality"],
+            payload["sex_category"],
+            payload["age_group"],
+            payload["swim_time"],
+            payload["t1_time"],
+            payload["bike_time"],
+            payload["t2_time"],
+            payload["run_time"],
+            total_time=payload.get("total_time"),
         )
     if intent == "find_weakest_main_segment":
         return find_weakest_main_segment(
