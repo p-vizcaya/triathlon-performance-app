@@ -291,7 +291,7 @@ def _attribution(locale: str) -> None:
     st.divider()
     if locale == "es":
         st.caption(
-            "Tablas de desempeno y percentiles elaboradas por P. Vizcaya a partir de resultados "
+            "Tablas de desempeño y percentiles elaboradas por P. Vizcaya a partir de resultados "
             "publicados por World Triathlon."
         )
         st.caption("Reportes y comentarios: WhatsApp +57 320 453 5652.")

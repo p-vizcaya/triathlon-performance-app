@@ -58,7 +58,7 @@ def _uncertainty_note_es(result: dict[str, Any]) -> str:
         return ""
     if "recommended_time_fast" in uncertainty and "recommended_time_slow" in uncertainty:
         return (
-            f" En campeonatos tipicamente faciles o dificiles, el tiempo equivalente queda aproximadamente entre "
+            f" En campeonatos típicamente fáciles o difíciles, el tiempo equivalente queda aproximadamente entre "
             f"{uncertainty['recommended_time_fast']} y {uncertainty['recommended_time_slow']}."
         )
     if "difficulty_percentile_q25" in uncertainty and "difficulty_percentile_q75" in uncertainty:
@@ -278,7 +278,7 @@ def _explain_percentile_es(result: dict[str, Any]) -> str:
     scope_text = "Total" if str(scope).lower() == "total" else str(scope)
     percentile = float(result["percentile"])
     return (
-        f"{round_percentile(percentile)} significa que el desempeno es mejor que aproximadamente "
+        f"{round_percentile(percentile)} significa que el desempeño es mejor que aproximadamente "
         f"el {percentile:.1f}% de {scope_text}, usando la curva de referencia o tabla conjunta correspondiente."
     )
 
@@ -305,7 +305,7 @@ def _condition_text_es(condition: dict[str, Any]) -> str:
             f"{condition['upper_performance_percentile']:.1f}"
         )
     if operator == "slower_than":
-        return f"{segment} mas lento que el umbral {condition['performance_percentile']:.1f}"
+        return f"{segment} más lento que el umbral {condition['performance_percentile']:.1f}"
     return f"{segment} al menos tan bueno como el umbral {condition['performance_percentile']:.1f}"
 
 
@@ -337,7 +337,7 @@ def _event_curve_explanation_es(result: dict[str, Any]) -> str:
     if result.get("query_type") == "time_to_position":
         return (
             f"Para {_context(result)}, un {result['segment']} de {result['input_time']} habria quedado "
-            f"aproximadamente en la posicion {first['estimated_position']} de {first['n']} en "
+            f"aproximadamente en la posición {first['estimated_position']} de {first['n']} en "
             f"{first['event_name']} ({first['year']}), equivalente a "
             f"{round_percentile(first['performance_percentile'])}. "
             f"Es una comparacion empirica directa, sin ajuste por dificultad del evento."
@@ -392,7 +392,7 @@ def explain_result(result: dict[str, Any], locale: str = "en") -> str:
         if entity == "gap_to_target_percentile":
             return _gap_explanation_es(result)
         if entity == "compare_segments":
-            return str(result.get("summary", "Comparacion de segmentos completada."))
+            return str(result.get("summary", "Comparación de segmentos completada."))
         if entity == "explain_percentile":
             return _explain_percentile_es(result)
         if entity == "conditional_segment_percentile":

@@ -94,11 +94,11 @@ UI_TEXT = {
         "available_events": "Eventos disponibles",
         "event_pick": "Selecciona eventos",
         "event_missing": "No hay una lista de campeonatos disponible en este paquete.",
-        "app_title": "Tablas de Desempeno en Triatlon",
+        "app_title": "Tablas de Desempeño en Triatlón",
         "app_subtitle": "Compara tus tiempos con deportistas de tu misma distancia, sexo y grupo de edad.",
         "brand": "Global Triathlon Colombia",
-        "query_route": "Que quieres hacer?",
-        "query_detail": "Elige la pregunta especifica",
+        "query_route": "¿Qué quieres hacer?",
+        "query_detail": "Elige la pregunta específica",
     },
 }
 
@@ -173,7 +173,7 @@ QUERY_LABELS = {
         "Gap to target percentile": "Brecha frente a percentil objetivo",
         "Required missing segment for target percentile": "Segmento faltante para percentil objetivo",
         "Compare segments": "Comparar segmentos",
-        "Direct championship comparison": "Comparacion directa con campeonatos",
+        "Direct championship comparison": "Comparación directa con campeonatos",
         "Conditional segment percentile": "Percentil condicional de segmento",
         "Explain percentile": "Explicar percentil",
     },
@@ -340,7 +340,7 @@ def _brand_header(locale: str) -> None:
                 <h1 class="gtc-title">{html.escape(_ui(locale, "app_title"))}</h1>
                 <div class="gtc-subtitle">{html.escape(_ui(locale, "app_subtitle"))}</div>
                 <div class="gtc-disciplines">
-                    <span class="gtc-chip">{'Swim' if locale == 'en' else 'Natacion'}</span>
+                    <span class="gtc-chip">{'Swim' if locale == 'en' else 'Natación'}</span>
                     <span class="gtc-chip">{'Bike' if locale == 'en' else 'Ciclismo'}</span>
                     <span class="gtc-chip">{'Run' if locale == 'en' else 'Carrera'}</span>
                 </div>
@@ -698,13 +698,13 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
         st.caption(
             "Direct empirical comparison against the selected championship; no event-difficulty adjustment is applied."
             if locale == "en"
-            else "Comparacion empirica directa contra el campeonato seleccionado; no se aplica ajuste por dificultad del evento."
+            else "Comparación empírica directa contra el campeonato seleccionado; no se aplica ajuste por dificultad del evento."
         )
         mode = st.radio(
             "Mode" if locale == "en" else "Modo",
             ("Time to event position", "Event percentile to time")
             if locale == "en"
-            else ("Tiempo a posicion en campeonato", "Percentil del campeonato a tiempo"),
+            else ("Tiempo a posición en campeonato", "Percentil del campeonato a tiempo"),
             horizontal=True,
         )
         options = list_event_options(modality, sex_category, age_group, segment, min_n=20)
@@ -715,8 +715,8 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
             default=labels[-min(3, len(labels)) :],
         )
         selected_years = [row["year"] for row, label in zip(options, labels) if label in selected]
-        min_n = st.number_input("Minimum n" if locale == "en" else "n minimo", min_value=1, max_value=100, value=20, step=1)
-        if mode in ("Time to event position", "Tiempo a posicion en campeonato"):
+        min_n = st.number_input("Minimum n" if locale == "en" else "n mínimo", min_value=1, max_value=100, value=20, step=1)
+        if mode in ("Time to event position", "Tiempo a posición en campeonato"):
             time_value = _time_or_sport_unit("Time" if locale == "en" else "Tiempo", segment, modality, key="event_cmp_time")
             return {
                 **base,
