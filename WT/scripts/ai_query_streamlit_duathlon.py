@@ -29,8 +29,6 @@ ROUTES = {
     "Evaluate a time": (
         "Total time to percentile",
         "Segment time to percentile",
-        "Joint percentile for two main segments",
-        "Joint percentile for Run1/Bike/Run2",
     ),
     "Find a target time": (
         "Percentile to total time",
