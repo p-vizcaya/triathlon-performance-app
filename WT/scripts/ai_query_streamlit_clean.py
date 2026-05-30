@@ -303,6 +303,14 @@ def _attribution(locale: str, source: str = "World Triathlon") -> None:
         st.caption("Reports and feedback: WhatsApp +57 320 453 5652.")
 
 
+def _mobile_sidebar_note(locale: str) -> None:
+    st.info(
+        "En celular, abre la ventana lateral con `>>` para fijar disciplina, modalidad, sexo y grupo de edad antes del análisis."
+        if locale == "es"
+        else "On mobile, open the sidebar with `>>` to set discipline, modality, sex, and age group before the analysis."
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="Triathlon Performance", layout="wide")
     _init_session_state()
@@ -310,6 +318,7 @@ def main() -> None:
     locale = _language_control()
     _apply_theme()
     _brand_header(locale)
+    _mobile_sidebar_note(locale)
     discipline = st.sidebar.selectbox("Disciplina" if locale == "es" else "Discipline", ("Triathlon", "Duathlon"))
     if discipline == "Duathlon":
         from scripts.ai_query_streamlit_duathlon import render_duathlon_page
