@@ -310,6 +310,13 @@ def main() -> None:
     locale = _language_control()
     _apply_theme()
     _brand_header(locale)
+    discipline = st.sidebar.selectbox("Disciplina" if locale == "es" else "Discipline", ("Triathlon", "Duathlon"))
+    if discipline == "Duathlon":
+        from scripts.ai_query_streamlit_duathlon import render_duathlon_page
+
+        render_duathlon_page(locale)
+        _attribution(locale)
+        return
     modality, sex_category, age_group = _context_controls(locale)
     guided, dialog = st.tabs([_ui(locale, "guided_query"), "Hacer una pregunta" if locale == "es" else "Ask a question"])
 
