@@ -646,6 +646,15 @@ def _event_label(row: dict[str, Any]) -> str:
     return f"{int(row['year'])} - {event}"
 
 
+def _event_coverage_text(rows: list[dict[str, Any]], locale: str) -> str:
+    years = sorted({int(row["year"]) for row in rows})
+    if not years:
+        return ""
+    if locale == "es":
+        return f"{len(years)} eventos disponibles entre {years[0]} y {years[-1]}. La lista tiene desplazamiento vertical."
+    return f"{len(years)} events available between {years[0]} and {years[-1]}. Scroll the list to see all years."
+
+
 def _championship_event_controls(modality: str, sex_category: str, age_group: str, locale: str) -> None:
     event_sex = "M" if sex_category == "O" else sex_category
     rows = [
@@ -660,7 +669,7 @@ def _championship_event_controls(modality: str, sex_category: str, age_group: st
             st.caption(_ui(locale, "event_missing"))
             return
 
-        st.caption(_ui(locale, "available_events") + f": {len(rows)}")
+        st.caption(_event_coverage_text(rows, locale))
         table_rows = [
             {
                 "year": int(row["year"]),
@@ -834,7 +843,9 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
             else ("Tiempo a posici\u00f3n en campeonato", "Percentil del campeonato a tiempo"),
             horizontal=True,
         )
-        options = list_event_options(modality, sex_category, age_group, segment, min_n=20)
+        min_n = st.number_input("Minimum n" if locale == "en" else "n m\u00ednimo", min_value=1, max_value=100, value=20, step=1)
+        options = list_event_options(modality, sex_category, age_group, segment, min_n=int(min_n))
+        st.caption(_event_coverage_text(options, locale))
         labels = [f"{row['year']} - {row['event_name']} (n={row['n']})" for row in options]
         selected = st.multiselect(
             "Championships" if locale == "en" else "Campeonatos",
@@ -842,7 +853,6 @@ def _guided_payload(modality: str, sex_category: str, age_group: str, locale: st
             default=labels[-min(3, len(labels)) :],
         )
         selected_years = [row["year"] for row, label in zip(options, labels) if label in selected]
-        min_n = st.number_input("Minimum n" if locale == "en" else "n m\u00ednimo", min_value=1, max_value=100, value=20, step=1)
         if mode in ("Time to event position", "Tiempo a posici\u00f3n en campeonato"):
             time_value = _time_or_sport_unit("Time", segment, modality, key="event_cmp_time", locale=locale)
             return {
