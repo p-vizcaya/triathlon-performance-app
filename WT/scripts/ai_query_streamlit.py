@@ -686,7 +686,6 @@ def _context_controls(locale: str = "en") -> tuple[str, str, str]:
     sex_category = st.sidebar.selectbox(_ui(locale, "sex"), ("O", "F"), help="O includes Open/Male; F is Female.")
     age_groups = STANDARD_AGE_GROUPS if modality == "Standard" else SPRINT_AGE_GROUPS
     age_group = st.sidebar.selectbox(_ui(locale, "age_group"), age_groups)
-    _championship_event_controls(modality, sex_category, age_group, locale)
     return modality, sex_category, age_group
 
 

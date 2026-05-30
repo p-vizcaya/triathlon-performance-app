@@ -7,9 +7,12 @@ import streamlit as st
 from scripts.duathlon_query import (
     cube_times_query,
     curve_query,
+    event_percentile_query,
+    event_time_query,
     evaluate_profile,
     gap_query,
     load_index,
+    list_event_options,
     pair_times_query,
     required_segment_query,
 )
@@ -32,6 +35,9 @@ ROUTES = {
     "Find a target time": (
         "Percentile to total time",
         "Percentile to segment time",
+    ),
+    "Compare with a championship": (
+        "Direct championship comparison",
     ),
     "Analyze segments": (
         "Estimated total from Run1/Bike/Run2",
@@ -96,7 +102,7 @@ def _time(label: str, key: str, placeholder: str = "40:00") -> str:
 
 
 def _percentile(label: str, key: str) -> float:
-    return st.number_input(label, min_value=0.0, max_value=100.0, value=75.0, step=1.0, key=key)
+    return float(st.slider(label, min_value=0, max_value=100, value=75, step=1, key=key))
 
 
 def _show_curve(locale: str, context: str, result: dict) -> None:
@@ -146,6 +152,7 @@ def _labels(locale: str) -> dict[str, str]:
         "Evaluate a time": _text(locale, "Evaluate a time", "Evaluar un tiempo"),
         "Find a target time": _text(locale, "Find a target time", "Buscar un tiempo objetivo"),
         "Analyze segments": _text(locale, "Analyze segments", "Evaluar mis segmentos"),
+        "Compare with a championship": _text(locale, "Compare with a championship", "Compararme con un campeonato"),
         "Improve toward a goal": _text(locale, "Improve toward a goal", "Mejorar hacia un objetivo"),
         "Advanced / help": _text(locale, "Advanced / help", "Avanzadas / ayuda"),
         "Total time to percentile": _text(locale, "Total time to percentile", "Percentil por tiempo total"),
@@ -154,6 +161,7 @@ def _labels(locale: str) -> dict[str, str]:
         "Joint percentile for Run1/Bike/Run2": _text(locale, "Joint percentile for Run1/Bike/Run2", "Percentil conjunto de Carrera 1/Bicicleta/Carrera 2"),
         "Percentile to total time": _text(locale, "Percentile to total time", "Tiempo total por percentil"),
         "Percentile to segment time": _text(locale, "Percentile to segment time", "Tiempo de segmento por percentil"),
+        "Direct championship comparison": _text(locale, "Direct championship comparison", "Comparación directa con campeonatos"),
         "Estimated total from Run1/Bike/Run2": _text(locale, "Estimated total from Run1/Bike/Run2", "Total estimado por Carrera 1/Bicicleta/Carrera 2"),
         "Full split evaluation": _text(locale, "Full split evaluation", "Evaluación completa de segmentos"),
         "Compare segments": _text(locale, "Compare segments", "Comparar segmentos"),
@@ -188,6 +196,53 @@ def _guided_query(locale: str, modality: str, sex: str, age_group: str) -> None:
         value = _percentile(_text(locale, "Percentile", "Percentil"), "du_segment_pct")
         if st.button(_text(locale, "Get answer", "Obtener respuesta"), type="primary"):
             _show_curve(locale, context, curve_query(modality, internal_sex, age_group, segment, value, by_percentile=True))
+    elif query == "Direct championship comparison":
+        segment = st.selectbox(_text(locale, "Segment", "Segmento"), ("Total", *SEGMENTS), format_func=lambda value: _segment(locale, value), key="du_event_segment")
+        min_n = st.slider(_text(locale, "Minimum category size", "Tamaño mínimo de la categoría"), 1, 100, 20, key="du_event_min_n")
+        options = list_event_options(modality, internal_sex, age_group, segment, min_n=min_n)
+        event_labels = [f"{row['year']} - {row['event_name']} (n={row['n']})" for row in options]
+        selected = st.multiselect(
+            _text(locale, "Championships", "Campeonatos"),
+            event_labels,
+            default=event_labels[-min(3, len(event_labels)):],
+            key="du_event_years",
+        )
+        years = [row["year"] for row, label in zip(options, event_labels) if label in selected]
+        mode = st.radio(
+            _text(locale, "Mode", "Modo"),
+            ("Time to event position", "Event percentile to time"),
+            format_func=lambda value: _text(locale, value, "Tiempo a posición en campeonato" if value == "Time to event position" else "Percentil del campeonato a tiempo"),
+            horizontal=True,
+            key="du_event_mode",
+        )
+        if mode == "Time to event position":
+            value = _time(_text(locale, "Time", "Tiempo"), "du_event_time", "2:18:00")
+        else:
+            value = _percentile(_text(locale, "Percentile", "Percentil"), "du_event_pct")
+        if st.button(_text(locale, "Get answer", "Obtener respuesta"), type="primary"):
+            result = event_time_query(modality, internal_sex, age_group, segment, value, years, min_n=min_n) if mode == "Time to event position" else event_percentile_query(modality, internal_sex, age_group, segment, value, years, min_n=min_n)
+            rows = []
+            for row in result["comparisons"]:
+                rows.append({
+                    _text(locale, "Year", "Año"): row["year"],
+                    _text(locale, "Championship", "Campeonato"): row["event_name"],
+                    "n": row["n"],
+                    _text(locale, "Position", "Posición"): round(float(row["estimated_position"]), 1) if row.get("estimated_position") is not None else None,
+                    _text(locale, "Percentile", "Percentil"): round(float(row["performance_percentile"]), 1) if "performance_percentile" in row else row.get("percentile"),
+                    _text(locale, "Time", "Tiempo"): row.get("estimated_time", row.get("input_time")),
+                    _text(locale, "Status", "Estado"): row.get("status", "ok"),
+                })
+            if rows:
+                first = next((row for row in result["comparisons"] if row.get("valid")), None)
+                if first:
+                    _card(
+                        f"{context} | {_segment(locale, segment)} | {first['event_name']}",
+                        f"P{first['performance_percentile']:.1f}" if "performance_percentile" in first else first["estimated_time"],
+                        _text(locale, "Direct empirical championship comparison; no event-difficulty adjustment is applied.", "Comparación empírica directa con el campeonato; no se aplica ajuste por dificultad del evento."),
+                    )
+                st.dataframe(rows, hide_index=True, width="stretch")
+            else:
+                st.warning(_text(locale, "No championships meet the selected criteria.", "Ningún campeonato cumple los criterios seleccionados."))
     elif query == "Joint percentile for two main segments":
         pair = st.selectbox(_text(locale, "Segment pair", "Par de segmentos"), tuple(PAIR_SEGMENTS), format_func=lambda value: " + ".join(_segment(locale, item) for item in PAIR_SEGMENTS[value]))
         x_segment, y_segment = PAIR_SEGMENTS[pair]
@@ -241,5 +296,5 @@ def render_duathlon_page(locale: str = "es") -> None:
     internal_sex = _internal_sex(sex)
     ages = sorted({key.split("|")[2] for key in index["total_curves"] if key.startswith(f"{modality}|{internal_sex}|")}, key=lambda value: int(value.split("-")[0]))
     age_group = st.sidebar.selectbox(_text(locale, "Age group", "Grupo por edad"), ages, key="du_age")
-    st.info(_text(locale, "Guided queries for Duathlon are enabled. Championship-specific and conditional-athlete queries will be added when their dedicated indices are available.", "Las consultas guiadas de duatlón están habilitadas. Las consultas por campeonato y los filtros condicionales por atleta se agregarán cuando estén disponibles sus índices específicos."))
+    st.info(_text(locale, "Guided Duathlon queries are enabled. Conditional-athlete queries will be added when their dedicated index is available.", "Las consultas guiadas de duatlón están habilitadas. Los filtros condicionales por atleta se agregarán cuando esté disponible su índice específico."))
     _guided_query(locale, modality, sex, age_group)

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import bisect
 import gzip
 import json
+import math
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 
 INDEX_PATH = Path(__file__).resolve().parents[1] / "outputs" / "WT_Duathlon_Query_Index_1994_2025.json.gz"
+EVENT_INDEX_PATH = Path(__file__).resolve().parents[1] / "outputs" / "WT_Duathlon_Event_Curves_Index_1994_2025.json.gz"
 
 
 def _key(*parts: Any) -> str:
@@ -17,6 +20,12 @@ def _key(*parts: Any) -> str:
 @lru_cache(maxsize=1)
 def load_index() -> dict:
     with gzip.open(INDEX_PATH, "rt", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+@lru_cache(maxsize=1)
+def load_event_index() -> dict:
+    with gzip.open(EVENT_INDEX_PATH, "rt", encoding="utf-8") as handle:
         return json.load(handle)
 
 
@@ -243,3 +252,70 @@ def required_segment_query(
         "required_segment_percentile": curve_query(modality, sex, age_group, missing_segment, required_seconds)["performance_percentile"],
         "uses_median_transitions": True,
     }
+
+
+def list_event_options(modality: str, sex: str, age_group: str, segment: str = "Total", *, min_n: int = 20) -> list[dict]:
+    index = load_event_index()
+    rows = []
+    for event in index["events"].values():
+        if event["modality"] != modality or event["sex_label"] != sex or event["age_group"] != age_group:
+            continue
+        curve = index["curves"].get(_key(modality, sex, age_group, event["year"], segment))
+        if not curve or len(curve) < min_n:
+            continue
+        rows.append({**event, "n": len(curve)})
+    return sorted(rows, key=lambda row: row["year"])
+
+
+def event_time_query(modality: str, sex: str, age_group: str, segment: str, value: Any, years: list[int], *, min_n: int = 20) -> dict:
+    seconds = parse_time(value)
+    comparisons = []
+    index = load_event_index()
+    for event in list_event_options(modality, sex, age_group, segment, min_n=min_n):
+        if years and event["year"] not in years:
+            continue
+        curve = index["curves"][_key(modality, sex, age_group, event["year"], segment)]
+        if seconds < curve[0] or seconds > curve[-1]:
+            comparisons.append({
+                "year": event["year"], "event_name": event["event_name"], "n": len(curve),
+                "input_time": format_seconds(seconds), "valid": False,
+                "status": "outside_empirical_range",
+                "empirical_min_time": format_seconds(curve[0]), "empirical_max_time": format_seconds(curve[-1]),
+            })
+            continue
+        position = bisect.bisect_left(curve, seconds) + 1
+        percentile = 100.0 * (1.0 - (position - 0.5) / len(curve))
+        comparisons.append({
+            "year": event["year"], "event_name": event["event_name"], "n": len(curve),
+            "input_time": format_seconds(seconds), "estimated_position": position,
+            "performance_percentile": percentile, "valid": True,
+            "empirical_min_time": format_seconds(curve[0]), "empirical_max_time": format_seconds(curve[-1]),
+        })
+    return {"query_type": "time_to_position", "segment": segment, "input_time": format_seconds(seconds), "comparisons": comparisons}
+
+
+def event_percentile_query(modality: str, sex: str, age_group: str, segment: str, percentile: float, years: list[int], *, min_n: int = 20) -> dict:
+    comparisons = []
+    index = load_event_index()
+    for event in list_event_options(modality, sex, age_group, segment, min_n=min_n):
+        if years and event["year"] not in years:
+            continue
+        curve = index["curves"][_key(modality, sex, age_group, event["year"], segment)]
+        p_min = 100.0 * (0.5 / len(curve))
+        p_max = 100.0 * (1.0 - 0.5 / len(curve))
+        if percentile < p_min or percentile > p_max:
+            comparisons.append({
+                "year": event["year"], "event_name": event["event_name"], "n": len(curve),
+                "percentile": float(percentile), "valid": False,
+                "status": "outside_empirical_support", "p_min": p_min, "p_max": p_max,
+            })
+            continue
+        position = max(0.0, min(len(curve) - 1.0, (1.0 - percentile / 100.0) * len(curve) - 0.5))
+        lower, upper = math.floor(position), math.ceil(position)
+        seconds = curve[lower] if lower == upper else curve[lower] + (curve[upper] - curve[lower]) * (position - lower)
+        comparisons.append({
+            "year": event["year"], "event_name": event["event_name"], "n": len(curve),
+            "percentile": float(percentile), "estimated_position": position + 1,
+            "estimated_time": format_seconds(seconds), "valid": True,
+        })
+    return {"query_type": "percentile_to_time", "segment": segment, "percentile": float(percentile), "comparisons": comparisons}
