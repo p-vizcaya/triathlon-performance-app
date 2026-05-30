@@ -126,3 +126,120 @@ def cube_query(modality: str, sex: str, age_group: str, run1_percentile: float, 
         "run1_percentile": float(run1_percentile), "bike_percentile": float(bike_percentile), "run2_percentile": float(run2_percentile),
         "joint_rbr_percentile": _trilinear(rows, run1_percentile, bike_percentile, run2_percentile),
     }
+
+
+def pair_times_query(modality: str, sex: str, age_group: str, pair: str, x_time: Any, y_time: Any) -> dict:
+    x_segment, y_segment = {
+        "run1_bike": ("Run1", "Bike"),
+        "run1_run2": ("Run1", "Run2"),
+        "bike_run2": ("Bike", "Run2"),
+    }[pair]
+    x_curve = curve_query(modality, sex, age_group, x_segment, x_time)
+    y_curve = curve_query(modality, sex, age_group, y_segment, y_time)
+    result = pair_query(
+        modality,
+        sex,
+        age_group,
+        pair,
+        x_curve["performance_percentile"],
+        y_curve["performance_percentile"],
+    )
+    result.update({"input_x_time": x_curve["time"], "input_y_time": y_curve["time"]})
+    return result
+
+
+def cube_times_query(modality: str, sex: str, age_group: str, run1_time: Any, bike_time: Any, run2_time: Any) -> dict:
+    curves = {
+        "Run1": curve_query(modality, sex, age_group, "Run1", run1_time),
+        "Bike": curve_query(modality, sex, age_group, "Bike", bike_time),
+        "Run2": curve_query(modality, sex, age_group, "Run2", run2_time),
+    }
+    result = cube_query(
+        modality,
+        sex,
+        age_group,
+        curves["Run1"]["performance_percentile"],
+        curves["Bike"]["performance_percentile"],
+        curves["Run2"]["performance_percentile"],
+    )
+    result.update({
+        "input_run1_time": curves["Run1"]["time"],
+        "input_bike_time": curves["Bike"]["time"],
+        "input_run2_time": curves["Run2"]["time"],
+    })
+    return result
+
+
+def evaluate_profile(
+    modality: str,
+    sex: str,
+    age_group: str,
+    run1_time: Any,
+    bike_time: Any,
+    run2_time: Any,
+    *,
+    t1_time: Any | None = None,
+    t2_time: Any | None = None,
+) -> dict:
+    inputs = {"Run1": run1_time, "Bike": bike_time, "Run2": run2_time}
+    if t1_time:
+        inputs["T1"] = t1_time
+    if t2_time:
+        inputs["T2"] = t2_time
+    segments = [curve_query(modality, sex, age_group, segment, value) for segment, value in inputs.items()]
+    for row in segments:
+        row["input_time"] = row["time"]
+
+    transition_times = {}
+    for transition in ("T1", "T2"):
+        if transition in inputs:
+            transition_times[transition] = parse_time(inputs[transition])
+        else:
+            transition_times[transition] = curve_query(modality, sex, age_group, transition, 50, by_percentile=True)["seconds"]
+
+    estimated_total_seconds = sum(parse_time(inputs[segment]) for segment in ("Run1", "Bike", "Run2")) + sum(transition_times.values())
+    estimated_total = curve_query(modality, sex, age_group, "Total", estimated_total_seconds)
+    cube = cube_times_query(modality, sex, age_group, run1_time, bike_time, run2_time)
+    return {
+        "segments": segments,
+        "estimated_total": estimated_total,
+        "estimated_total_time": format_seconds(estimated_total_seconds),
+        "cube": cube,
+        "used_median_transitions": not (t1_time and t2_time),
+    }
+
+
+def gap_query(modality: str, sex: str, age_group: str, segment: str, current_time: Any, target_percentile: float) -> dict:
+    current = curve_query(modality, sex, age_group, segment, current_time)
+    target = curve_query(modality, sex, age_group, segment, target_percentile, by_percentile=True)
+    return {
+        "segment": segment,
+        "current_time": current["time"],
+        "current_percentile": current["performance_percentile"],
+        "target_percentile": float(target_percentile),
+        "target_time": target["time"],
+        "improvement_seconds": max(0.0, current["seconds"] - target["seconds"]),
+        "improvement_time": format_seconds(max(0.0, current["seconds"] - target["seconds"])),
+    }
+
+
+def required_segment_query(
+    modality: str,
+    sex: str,
+    age_group: str,
+    missing_segment: str,
+    target_percentile: float,
+    known_times: dict[str, Any],
+) -> dict:
+    target = curve_query(modality, sex, age_group, "Total", target_percentile, by_percentile=True)
+    transitions = sum(curve_query(modality, sex, age_group, segment, 50, by_percentile=True)["seconds"] for segment in ("T1", "T2"))
+    known_seconds = sum(parse_time(value) for value in known_times.values())
+    required_seconds = max(0.0, target["seconds"] - transitions - known_seconds)
+    return {
+        "missing_segment": missing_segment,
+        "target_total_percentile": float(target_percentile),
+        "target_total_time": target["time"],
+        "required_time": format_seconds(required_seconds),
+        "required_segment_percentile": curve_query(modality, sex, age_group, missing_segment, required_seconds)["performance_percentile"],
+        "uses_median_transitions": True,
+    }
