@@ -5,7 +5,7 @@ import html
 import streamlit as st
 
 from scripts.ironman_query import (
-    cube_times_query,
+    conditional_segment_query,
     curve_query,
     event_percentile_query,
     event_time_query,
@@ -13,18 +13,13 @@ from scripts.ironman_query import (
     gap_query,
     load_index,
     list_event_options,
-    pair_times_query,
     required_segment_query,
 )
 
 
 SEGMENTS = ("Swim", "T1", "Bike", "T2", "Run")
 MAIN_SEGMENTS = ("Swim", "Bike", "Run")
-PAIR_SEGMENTS = {
-    "swim_bike": ("Swim", "Bike"),
-    "swim_run": ("Swim", "Run"),
-    "bike_run": ("Bike", "Run"),
-}
+CONDITION_OPERATORS = ("at_least_as_good", "slower_than", "between")
 ROUTES = {
     "Evaluate a time": (
         "Total time to percentile",
@@ -47,6 +42,7 @@ ROUTES = {
         "Required missing segment for target percentile",
     ),
     "Advanced / help": (
+        "Conditional segment percentile",
         "Explain percentile",
     ),
 }
@@ -121,28 +117,6 @@ def _show_curve(locale: str, context: str, result: dict) -> None:
         _card(f"{context} | {segment} P{percentile:.1f}", result["time"], _text(locale, "Estimated reference time.", "Tiempo de referencia estimado."))
 
 
-def _show_pair(locale: str, context: str, result: dict) -> None:
-    percentile = float(result["joint_pair_percentile"])
-    x_segment = _segment(locale, result["x_segment"])
-    y_segment = _segment(locale, result["y_segment"])
-    detail = _text(
-        locale,
-        f"{x_segment} {result['input_x_time']} and {y_segment} {result['input_y_time']}. This is a joint percentile, not an average of the two marginal percentiles.",
-        f"{x_segment} {result['input_x_time']} y {y_segment} {result['input_y_time']}. Es un percentil conjunto, no el promedio de los dos percentiles marginales.",
-    )
-    _card(f"{context} | {x_segment} + {y_segment}", f"P{percentile:.1f}", f"{detail} {_interpret(locale, percentile)}")
-
-
-def _show_cube(locale: str, context: str, result: dict) -> None:
-    percentile = float(result["joint_sbr_percentile"])
-    detail = _text(
-        locale,
-        f"Swim {result['input_swim_time']}, Bike {result['input_bike_time']}, Run {result['input_run_time']}. This is the joint three-segment percentile.",
-        f"Natación {result['input_swim_time']}, Bicicleta {result['input_bike_time']}, Carrera {result['input_run_time']}. Este es el percentil conjunto de los tres segmentos principales.",
-    )
-    _card(f"{context} | {_segment(locale, 'Swim')} + {_segment(locale, 'Bike')} + {_segment(locale, 'Run')}", f"P{percentile:.1f}", f"{detail} {_interpret(locale, percentile)}")
-
-
 def _show_profile(locale: str, context: str, result: dict) -> None:
     for row in result["segments"]:
         _show_curve(locale, context, row)
@@ -150,7 +124,54 @@ def _show_profile(locale: str, context: str, result: dict) -> None:
     percentile = float(total["performance_percentile"])
     note = _text(locale, "Median T1 and T2 were added.", "Se agregaron las medianas de T1 y T2.") if result["used_median_transitions"] else ""
     _card(f"{context} | {_text(locale, 'Estimated total', 'Total estimado')}", result["estimated_total_time"], f"P{percentile:.1f}. {note}")
-    _show_cube(locale, context, result["cube"])
+
+
+def _operator(locale: str, value: str) -> str:
+    return {
+        "at_least_as_good": _text(locale, "At least as good as", "Al menos tan bueno como"),
+        "slower_than": _text(locale, "Slower than", "Más lento que"),
+        "between": _text(locale, "Between", "Entre"),
+    }[value]
+
+
+def _condition_controls(locale: str, index: int, available: list[str], defaults: dict[str, str]) -> dict:
+    st.markdown(f"**{_text(locale, 'Condition', 'Condición')} {index}**")
+    segment = st.selectbox(
+        _text(locale, f"Condition {index} segment", f"Segmento de condición {index}"),
+        available,
+        format_func=lambda value: _segment(locale, value),
+        key=f"im_cond_{index}_segment",
+    )
+    operator = st.selectbox(
+        _text(locale, f"Condition {index} operator", f"Operador de condición {index}"),
+        CONDITION_OPERATORS,
+        format_func=lambda value: _operator(locale, value),
+        key=f"im_cond_{index}_operator",
+    )
+    result = {"segment": segment, "operator": operator}
+    if operator == "between":
+        left, right = st.columns(2)
+        with left:
+            result["lower_time"] = _time(_text(locale, "Lower time", "Tiempo inferior"), f"im_cond_{index}_lower", defaults[segment])
+        with right:
+            result["upper_time"] = _time(_text(locale, "Upper time", "Tiempo superior"), f"im_cond_{index}_upper", defaults[segment])
+    else:
+        result["time"] = _time(_text(locale, "Condition time", "Tiempo de la condición"), f"im_cond_{index}_time", defaults[segment])
+    return result
+
+
+def _show_conditional(locale: str, context: str, result: dict) -> None:
+    percentile = float(result["conditional_percentile"])
+    conditions = " y ".join(
+        f"{_segment(locale, row['segment'])} {_operator(locale, row['operator'])}"
+        for row in result["conditions"]
+    )
+    detail = _text(
+        locale,
+        f"Target marginal percentile: P{result['target_marginal_percentile']:.1f}. Conditional group: {conditions}.",
+        f"Percentil marginal objetivo: P{result['target_marginal_percentile']:.1f}. Grupo condicionado: {conditions}.",
+    )
+    _card(f"{context} | {_segment(locale, result['target_segment'])} {result['target_time']}", f"P{percentile:.1f}", detail)
 
 
 def _labels(locale: str) -> dict[str, str]:
@@ -163,8 +184,6 @@ def _labels(locale: str) -> dict[str, str]:
         "Advanced / help": _text(locale, "Advanced / help", "Avanzadas / ayuda"),
         "Total time to percentile": _text(locale, "Total time to percentile", "Percentil por tiempo total"),
         "Segment time to percentile": _text(locale, "Segment time to percentile", "Percentil por segmento"),
-        "Joint percentile for two main segments": _text(locale, "Joint percentile for two main segments", "Percentil conjunto de dos segmentos principales"),
-        "Joint percentile for Swim/Bike/Run": _text(locale, "Joint percentile for Swim/Bike/Run", "Percentil conjunto de Natación/Bicicleta/Carrera"),
         "Percentile to total time": _text(locale, "Percentile to total time", "Tiempo total por percentil"),
         "Percentile to segment time": _text(locale, "Percentile to segment time", "Tiempo de segmento por percentil"),
         "Direct championship comparison": _text(locale, "Direct championship comparison", "Comparación directa con campeonatos"),
@@ -173,6 +192,7 @@ def _labels(locale: str) -> dict[str, str]:
         "Compare segments": _text(locale, "Compare segments", "Comparar segmentos"),
         "Gap to target percentile": _text(locale, "Gap to target percentile", "Brecha frente a percentil objetivo"),
         "Required missing segment for target percentile": _text(locale, "Required missing segment for target percentile", "Segmento faltante para percentil objetivo"),
+        "Conditional segment percentile": _text(locale, "Conditional segment percentile", "Percentil condicional de segmento"),
         "Explain percentile": _text(locale, "Explain percentile", "Explicar percentil"),
     }
 
@@ -250,19 +270,6 @@ def _guided_query(locale: str, modality: str, sex: str, age_group: str) -> None:
                 st.dataframe(rows, hide_index=True, width="stretch")
             else:
                 st.warning(_text(locale, "No championships meet the selected criteria.", "Ningún campeonato cumple los criterios seleccionados."))
-    elif query == "Joint percentile for two main segments":
-        pair = st.selectbox(_text(locale, "Segment pair", "Par de segmentos"), tuple(PAIR_SEGMENTS), format_func=lambda value: " + ".join(_segment(locale, item) for item in PAIR_SEGMENTS[value]))
-        x_segment, y_segment = PAIR_SEGMENTS[pair]
-        x_time = _time(_segment(locale, x_segment), "im_pair_x")
-        y_time = _time(_segment(locale, y_segment), "im_pair_y")
-        if st.button(_text(locale, "Get answer", "Obtener respuesta"), type="primary"):
-            _show_pair(locale, context, pair_times_query(modality, internal_sex, age_group, pair, x_time, y_time))
-    elif query == "Joint percentile for Swim/Bike/Run":
-        swim = _time(_segment(locale, "Swim"), "im_cube_swim", defaults["Swim"])
-        bike = _time(_segment(locale, "Bike"), "im_cube_bike", defaults["Bike"])
-        run = _time(_segment(locale, "Run"), "im_cube_run", defaults["Run"])
-        if st.button(_text(locale, "Get answer", "Obtener respuesta"), type="primary"):
-            _show_cube(locale, context, cube_times_query(modality, internal_sex, age_group, swim, bike, run))
     elif query in ("Estimated total from Swim/Bike/Run", "Full split evaluation", "Compare segments"):
         swim = _time(_segment(locale, "Swim"), f"im_profile_swim_{query}", defaults["Swim"])
         bike = _time(_segment(locale, "Bike"), f"im_profile_bike_{query}", defaults["Bike"])
@@ -289,6 +296,20 @@ def _guided_query(locale: str, modality: str, sex: str, age_group: str) -> None:
             result = required_segment_query(modality, internal_sex, age_group, missing, target, known)
             detail = _text(locale, f"Estimated with median T1 and T2. Equivalent marginal performance: P{result['required_segment_percentile']:.1f}.", f"Estimado con las medianas de T1 y T2. Desempeño marginal equivalente: P{result['required_segment_percentile']:.1f}.")
             _card(f"{context} | {_segment(locale, missing)}", result["required_time"], detail)
+    elif query == "Conditional segment percentile":
+        target_segment = st.selectbox(_text(locale, "Target segment", "Segmento objetivo"), MAIN_SEGMENTS, index=2, format_func=lambda value: _segment(locale, value), key="im_cond_target_segment")
+        target_time = _time(_text(locale, "Target time", "Tiempo objetivo"), "im_cond_target_time", defaults[target_segment])
+        first = _condition_controls(locale, 1, [segment for segment in MAIN_SEGMENTS if segment != target_segment], defaults)
+        conditions = [first]
+        if st.checkbox(_text(locale, "Add second condition", "Agregar segunda condición"), key="im_cond_add_second"):
+            conditions.append(_condition_controls(locale, 2, [segment for segment in MAIN_SEGMENTS if segment not in (target_segment, first["segment"])], defaults))
+        if st.button(_text(locale, "Get answer", "Obtener respuesta"), type="primary"):
+            try:
+                result = conditional_segment_query(modality, internal_sex, age_group, target_segment, target_time, conditions)
+            except (KeyError, ValueError) as exc:
+                st.error(_text(locale, f"Could not calculate the conditional percentile: {exc}", f"No fue posible calcular el percentil condicional: {exc}"))
+            else:
+                _show_conditional(locale, context, result)
     elif query == "Explain percentile":
         value = _percentile(_text(locale, "Percentile", "Percentil"), "im_explain_pct")
         _card(_text(locale, "Percentile interpretation", "Interpretación del percentil"), f"P{value:.1f}", _interpret(locale, value))

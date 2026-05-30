@@ -11,6 +11,16 @@ from typing import Any
 
 INDEX_PATH = Path(__file__).resolve().parents[2] / "Ironman" / "outputs" / "Ironman_Query_Index.json.gz"
 EVENT_INDEX_PATH = Path(__file__).resolve().parents[2] / "Ironman" / "outputs" / "Ironman_Event_Curves_Index.json.gz"
+PAIR_BY_SEGMENTS = {
+    frozenset(("Swim", "Bike")): "swim_bike",
+    frozenset(("Swim", "Run")): "swim_run",
+    frozenset(("Bike", "Run")): "bike_run",
+}
+PAIR_SEGMENTS = {
+    "swim_bike": ("Swim", "Bike"),
+    "swim_run": ("Swim", "Run"),
+    "bike_run": ("Bike", "Run"),
+}
 
 
 def _key(*parts: Any) -> str:
@@ -179,6 +189,112 @@ def cube_times_query(modality: str, sex: str, age_group: str, swim_time: Any, bi
     return result
 
 
+def _pair_joint(
+    modality: str,
+    sex: str,
+    age_group: str,
+    first_segment: str,
+    first_percentile: float,
+    second_segment: str,
+    second_percentile: float,
+) -> float:
+    pair = PAIR_BY_SEGMENTS[frozenset((first_segment, second_segment))]
+    x_segment, y_segment = PAIR_SEGMENTS[pair]
+    percentiles = {first_segment: first_percentile, second_segment: second_percentile}
+    return float(pair_query(modality, sex, age_group, pair, percentiles[x_segment], percentiles[y_segment])["joint_pair_percentile"])
+
+
+def _cube_joint(percentiles: dict[str, float], modality: str, sex: str, age_group: str) -> float:
+    return float(cube_query(modality, sex, age_group, percentiles["Swim"], percentiles["Bike"], percentiles["Run"])["joint_sbr_percentile"])
+
+
+def _condition_event(modality: str, sex: str, age_group: str, segment: str, spec: dict[str, Any]) -> dict[str, Any]:
+    operator = spec["operator"]
+    if operator == "between":
+        lower = curve_query(modality, sex, age_group, segment, spec["lower_time"])
+        upper = curve_query(modality, sex, age_group, segment, spec["upper_time"])
+        low, high = sorted((float(lower["performance_percentile"]), float(upper["performance_percentile"])))
+        return {"segment": segment, "operator": operator, "low": low, "high": high, "probability": high - low}
+    threshold = curve_query(modality, sex, age_group, segment, spec["time"])
+    percentile = float(threshold["performance_percentile"])
+    if operator == "at_least_as_good":
+        return {"segment": segment, "operator": operator, "low": percentile, "high": 100.0, "probability": 100.0 - percentile}
+    if operator == "slower_than":
+        return {"segment": segment, "operator": operator, "low": 0.0, "high": percentile, "probability": percentile}
+    raise ValueError(f"Unsupported condition operator: {operator}")
+
+
+def conditional_segment_query(
+    modality: str,
+    sex: str,
+    age_group: str,
+    target_segment: str,
+    target_time: Any,
+    conditions: list[dict[str, Any]],
+) -> dict:
+    if target_segment not in ("Swim", "Bike", "Run"):
+        raise ValueError("Conditional analysis supports Swim, Bike, and Run only.")
+    if not 1 <= len(conditions) <= 2:
+        raise ValueError("Conditional analysis requires one or two conditions.")
+    condition_segments = [str(condition["segment"]) for condition in conditions]
+    if target_segment in condition_segments or len(set(condition_segments)) != len(condition_segments):
+        raise ValueError("Target and conditioning segments must be distinct.")
+
+    target = curve_query(modality, sex, age_group, target_segment, target_time)
+    target_percentile = float(target["performance_percentile"])
+    parsed = [
+        _condition_event(modality, sex, age_group, str(condition["segment"]), condition)
+        for condition in conditions
+    ]
+
+    if len(parsed) == 1:
+        condition = parsed[0]
+        denominator = float(condition["probability"])
+        numerator = (
+            _pair_joint(modality, sex, age_group, target_segment, target_percentile, condition["segment"], condition["high"])
+            - _pair_joint(modality, sex, age_group, target_segment, target_percentile, condition["segment"], condition["low"])
+        )
+    else:
+        first, second = parsed
+        denominator = (
+            _pair_joint(modality, sex, age_group, first["segment"], first["high"], second["segment"], second["high"])
+            - _pair_joint(modality, sex, age_group, first["segment"], first["low"], second["segment"], second["high"])
+            - _pair_joint(modality, sex, age_group, first["segment"], first["high"], second["segment"], second["low"])
+            + _pair_joint(modality, sex, age_group, first["segment"], first["low"], second["segment"], second["low"])
+        )
+
+        def joint(first_percentile: float, second_percentile: float) -> float:
+            return _cube_joint(
+                {
+                    target_segment: target_percentile,
+                    first["segment"]: first_percentile,
+                    second["segment"]: second_percentile,
+                },
+                modality,
+                sex,
+                age_group,
+            )
+
+        numerator = (
+            joint(first["high"], second["high"])
+            - joint(first["low"], second["high"])
+            - joint(first["high"], second["low"])
+            + joint(first["low"], second["low"])
+        )
+
+    if denominator <= 0:
+        raise ValueError("The selected conditioning group has zero probability.")
+    return {
+        "target_segment": target_segment,
+        "target_time": target["time"],
+        "target_marginal_percentile": target_percentile,
+        "conditions": parsed,
+        "numerator_joint_probability": max(0.0, numerator),
+        "denominator_probability": max(0.0, denominator),
+        "conditional_percentile": max(0.0, min(100.0, 100.0 * numerator / denominator)),
+    }
+
+
 def evaluate_profile(
     modality: str,
     sex: str,
@@ -208,12 +324,10 @@ def evaluate_profile(
 
     estimated_total_seconds = sum(parse_time(inputs[segment]) for segment in ("Swim", "Bike", "Run")) + sum(transition_times.values())
     estimated_total = curve_query(modality, sex, age_group, "Total", estimated_total_seconds)
-    cube = cube_times_query(modality, sex, age_group, swim_time, bike_time, run_time)
     return {
         "segments": segments,
         "estimated_total": estimated_total,
         "estimated_total_time": format_seconds(estimated_total_seconds),
-        "cube": cube,
         "used_median_transitions": not (t1_time and t2_time),
     }
 
