@@ -287,18 +287,18 @@ def _dialog_query(modality: str, sex_category: str, age_group: str, locale: str)
         _show_clean_response_inline(item["response"], locale)
 
 
-def _attribution(locale: str) -> None:
+def _attribution(locale: str, source: str = "World Triathlon") -> None:
     st.divider()
     if locale == "es":
         st.caption(
             "Tablas de desempeño y percentiles elaboradas por P. Vizcaya a partir de resultados "
-            "publicados por World Triathlon."
+            f"publicados por {source}."
         )
         st.caption("Reportes y comentarios: WhatsApp +57 320 453 5652.")
     else:
         st.caption(
             "Performance and percentile tables developed by P. Vizcaya using results published "
-            "by World Triathlon."
+            f"by {source}."
         )
         st.caption("Reports and feedback: WhatsApp +57 320 453 5652.")
 
@@ -316,6 +316,20 @@ def main() -> None:
 
         render_duathlon_page(locale)
         _attribution(locale)
+        return
+    triathlon_family = st.sidebar.selectbox(
+        "Tipo de triatlón" if locale == "es" else "Triathlon type",
+        ("Short distance", "Long distance"),
+        format_func=lambda value: {
+            "Short distance": "Sprint / Distancia Estándar" if locale == "es" else "Sprint / Standard Distance",
+            "Long distance": "Media / Larga Distancia" if locale == "es" else "Middle / Long Distance",
+        }[value],
+    )
+    if triathlon_family == "Long distance":
+        from scripts.ai_query_streamlit_ironman import render_ironman_page
+
+        render_ironman_page(locale)
+        _attribution(locale, "IRONMAN and CoachCox")
         return
     modality, sex_category, age_group = _context_controls(locale)
     guided, dialog = st.tabs([_ui(locale, "guided_query"), "Hacer una pregunta" if locale == "es" else "Ask a question"])
